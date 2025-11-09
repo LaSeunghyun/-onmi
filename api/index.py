@@ -12,11 +12,24 @@ def log(message, level="INFO"):
     print(msg, file=sys.stdout, flush=True)
     print(msg, file=sys.stderr, flush=True)
 
-# 프로젝트 루트 경로 추가
+# 프로젝트 루트 및 필수 서브 경로 등록
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "backend" / "shared"))
-sys.path.insert(0, str(project_root / "backend" / "api-gateway" / "src"))
+paths_to_add = [
+    (project_root, "프로젝트 루트"),
+    (project_root / "backend" / "shared", "공유 모듈"),
+    (project_root / "backend" / "api-gateway" / "src", "API Gateway 소스"),
+]
+
+for target_path, label in paths_to_add:
+    path_str = str(target_path)
+    if not target_path.exists():
+        log(f"경로 추가 실패: {label} -> {target_path} (존재하지 않음)", "WARN")
+        continue
+    if path_str in sys.path:
+        log(f"경로 이미 등록됨: {label} -> {target_path}")
+        continue
+    sys.path.insert(0, path_str)
+    log(f"경로 추가 성공: {label} -> {target_path}")
 
 # 디버깅을 위한 경로 출력
 log(f"=== Vercel 서버리스 함수 시작 ===")

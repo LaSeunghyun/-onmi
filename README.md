@@ -178,6 +178,19 @@ docker exec -i onmi-postgres psql -U onmi -d onmi_db < backend/shared/database/m
 - [워크플로우 문서](docs/workflow.md) - 시스템 워크플로우 상세 설명
 - [수집 및 피드백 로직](docs/fetch_feedback_logic.md) - 기간 계산 및 피드백 기반 개선 메커니즘
 
+## Vercel 배포 체크리스트
+
+- `vercel.json`의 `functions.api/index.py.includeFiles` 및 `functions.api/cron/crawl.py.includeFiles`에 `backend/shared/**`, `backend/api-gateway/src/**`, `config/**`가 포함되어 있는지 확인합니다.
+- 동일한 함수 설정에 `excludeFiles` 항목으로 `backend/**/venv/**`, `backend/**/__pycache__/**`가 선언되어 불필요한 파일이 번들되지 않도록 합니다.
+- `vercel.json`의 `env.PYTHONPATH` 값이 `.`, `backend/shared`, `backend/api-gateway/src`를 모두 포함하는지 검증합니다.
+- 배포 전에 로컬 PowerShell에서 아래 명령을 실행해 `backend` 네임스페이스가 정상적으로 탐지되는지 확인합니다.
+
+```powershell
+py -3 -c "import sys; sys.path.insert(0, r'C:\onmi'); import backend.shared.config.settings"
+```
+
+- 환경 변수를 갱신하거나 `vercel.json`을 수정했다면 Vercel 대시보드의 최근 배포에서 **Redeploy**를 수행해 변경 사항을 적용합니다.
+
 ## 추가 API 엔드포인트
 
 ### 인증

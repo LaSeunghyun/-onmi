@@ -21,10 +21,14 @@
   },
   "functions": {
     "api/index.py": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "{backend/shared/**,backend/api-gateway/src/**,config/**}",
+      "excludeFiles": "{backend/**/venv/**,backend/**/__pycache__/**}"
     },
     "api/cron/crawl.py": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "includeFiles": "{backend/shared/**,backend/api-gateway/src/**,config/**}",
+      "excludeFiles": "{backend/**/venv/**,backend/**/__pycache__/**}"
     }
   },
   "regions": ["icn1"]

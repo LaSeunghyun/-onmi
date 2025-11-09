@@ -20,3 +20,4 @@ CREATE INDEX IF NOT EXISTS idx_users_oauth_email ON users(oauth_email);
 -- 일반 사용자는 password_hash가 있어야 함
 -- (애플리케이션 레벨에서 검증)
 
+

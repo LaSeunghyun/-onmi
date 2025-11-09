@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### 추가됨
+- `backend/shared/__init__.py` - 공유 모듈 네임스페이스를 명시적으로 선언
 - 키워드 조회 시 중복 기간 제외 기능
   - 기존에 조회한 일자는 제외하고 조회
   - 첫 조회인 경우 직전 하루만 수집
@@ -37,10 +38,13 @@
   - 크롤러 워커에 중복 기간 제외 로직 적용
 
 ### 변경됨
+- Vercel Python 함수 번들이 `backend/shared/**`, `backend/api-gateway/src/**`, `config/**`를 포함하고 불필요한 캐시·가상환경 파일을 제외하도록 `vercel.json`을 조정
+- `api/index.py`가 경로 존재 여부를 검사하고 중복 삽입을 방지하는 로그를 출력하도록 개선
 - 크롤러 워커가 `last_crawled_at`을 확인하여 증분 수집 수행
 - RSS 수집기가 날짜 범위 필터링 지원
 
 ### 문서화
+- README.md - Vercel 배포 체크리스트 및 임포트 검증 절차 추가
 - `docs/workflow.md` - 워크플로우 다이어그램 및 설명 추가
 - `docs/fetch_feedback_logic.md` - 수집 및 피드백 로직 상세 문서 추가
 - `README.md` - 새 기능 및 API 사용법 추가
