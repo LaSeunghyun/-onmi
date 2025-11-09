@@ -4,9 +4,17 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/cron/crawl.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
+    {
+      "src": "/api/cron/crawl",
+      "dest": "api/cron/crawl.py"
+    },
     {
       "src": "/(.*)",
       "dest": "api/index.py"
@@ -20,16 +28,6 @@
   ],
   "env": {
     "PYTHONPATH": "."
-  },
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "api/cron/crawl.py": {
-      "maxDuration": 300,
-      "memory": 1024
-    }
   },
   "regions": ["icn1"]
 }
