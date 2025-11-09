@@ -36,8 +36,8 @@ except Exception as e:
     raise
 
 try:
-    # 라우터 import - 절대 경로 사용
-    from src.routes import auth, keywords, feed, articles, stats, share, notifications
+    # 라우터 import - sys.path에 backend/api-gateway/src가 추가되어 있으므로 routes로 직접 import
+    from routes import auth, keywords, feed, articles, stats, share, notifications
     print("Routes import 성공", file=sys.stderr)
 except Exception as e:
     print(f"Routes import error: {e}", file=sys.stderr)
