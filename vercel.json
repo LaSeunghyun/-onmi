@@ -27,7 +27,15 @@
     }
   ],
   "env": {
-    "PYTHONPATH": "."
+    "PYTHONPATH": ".:backend/shared:backend/api-gateway/src"
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30
+    },
+    "api/cron/crawl.py": {
+      "maxDuration": 300
+    }
   },
   "regions": ["icn1"]
 }
