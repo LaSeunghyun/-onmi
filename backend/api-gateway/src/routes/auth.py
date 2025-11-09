@@ -1,0 +1,314 @@
+"""인증 관련 라우터"""
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel, EmailStr
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+import bcrypt
+import sys
+import os
+import logging
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from config.settings import settings
+from database.connection import get_db_connection
+from services.google_oauth_service import GoogleOAuthService
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/signin")
+
+
+class SignUpRequest(BaseModel):
+    email: EmailStr
+    password: str
+    locale: str = "ko-KR"
+
+
+class SignInRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class GoogleTokenRequest(BaseModel):
+    id_token: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """비밀번호 검증 - bcrypt 직접 사용"""
+    try:
+        # bcrypt를 직접 사용하여 호환성 문제 해결
+        password_bytes = plain_password.encode('utf-8')
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception as e:
+        logger.error(f"비밀번호 검증 오류: {e}")
+        return False
+
+
+def get_password_hash(password: str) -> str:
+    """비밀번호 해싱 - bcrypt 직접 사용"""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hash_bytes = bcrypt.hashpw(password_bytes, salt)
+    return hash_bytes.decode('utf-8')
+
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    """JWT 토큰 생성"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=7)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret, algorithm="HS256")
+    return encoded_jwt
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """현재 사용자 가져오기"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="인증 정보를 확인할 수 없습니다",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    async with get_db_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email, locale FROM users WHERE id = $1",
+            user_id
+        )
+        if user is None:
+            raise credentials_exception
+        return dict(user)
+
+
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
+async def signup(request: SignUpRequest):
+    """회원가입"""
+    try:
+        async with get_db_connection() as conn:
+            # 이메일 중복 확인
+            existing = await conn.fetchrow(
+                "SELECT id FROM users WHERE email = $1",
+                request.email
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이미 사용 중인 이메일입니다"
+                )
+            
+            # 비밀번호 해싱 및 사용자 생성
+            password_hash = get_password_hash(request.password)
+            user_id = await conn.fetchval(
+                """
+                INSERT INTO users (email, password_hash, locale)
+                VALUES ($1, $2, $3)
+                RETURNING id
+                """,
+                request.email, password_hash, request.locale
+            )
+            
+            # JWT 토큰 생성
+            access_token = create_access_token(data={"sub": str(user_id)})
+            
+            return TokenResponse(access_token=access_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"회원가입 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="회원가입 처리 중 오류가 발생했습니다"
+        )
+
+
+@router.post("/signin", response_model=TokenResponse)
+async def signin(form_data: OAuth2PasswordRequestForm = Depends()):
+    """로그인 (OAuth2 형식 - application/x-www-form-urlencoded)"""
+    logger.info(f"🔐 /auth/signin 호출됨")
+    logger.info(f"   username (email): {form_data.username}")
+    logger.info(f"   password: {'*' * len(form_data.password) if form_data.password else 'None'}")
+    
+    try:
+        async with get_db_connection() as conn:
+            user = await conn.fetchrow(
+                "SELECT id, password_hash FROM users WHERE email = $1",
+                form_data.username
+            )
+            
+            if not user or not verify_password(form_data.password, user["password_hash"]):
+                logger.warning(f"   ❌ 인증 실패: 이메일 또는 비밀번호 불일치")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="이메일 또는 비밀번호가 올바르지 않습니다",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            logger.info(f"   ✅ 인증 성공: 사용자 ID {user['id']}")
+            access_token = create_access_token(data={"sub": str(user["id"])})
+            return TokenResponse(access_token=access_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"   ❌ 로그인 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="로그인 처리 중 오류가 발생했습니다"
+        )
+
+
+@router.post("/signin-json", response_model=TokenResponse)
+async def signin_json(request: SignInRequest):
+    """로그인 (JSON 형식) - Flutter 앱용"""
+    logger.info(f"🔐 /auth/signin-json 호출됨")
+    logger.info(f"   email: {request.email}")
+    logger.info(f"   password: {'*' * len(request.password) if request.password else 'None'}")
+    
+    try:
+        async with get_db_connection() as conn:
+            user = await conn.fetchrow(
+                "SELECT id, password_hash FROM users WHERE email = $1",
+                request.email
+            )
+            
+            if not user or not verify_password(request.password, user["password_hash"]):
+                logger.warning(f"   ❌ 인증 실패: 이메일 또는 비밀번호 불일치")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="이메일 또는 비밀번호가 올바르지 않습니다",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            logger.info(f"   ✅ 인증 성공: 사용자 ID {user['id']}")
+            access_token = create_access_token(data={"sub": str(user["id"])})
+            return TokenResponse(access_token=access_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"   ❌ 로그인(JSON) 중 오류 발생: {e}")
+        logger.error(f"   오류 상세:\n{error_traceback}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"로그인 처리 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.post("/google/token", response_model=TokenResponse)
+async def google_oauth_token(request: GoogleTokenRequest):
+    """Google OAuth ID 토큰으로 로그인
+    
+    클라이언트에서 Google 로그인 후 받은 ID 토큰을 검증하고,
+    사용자를 생성하거나 조회한 후 JWT 토큰을 발급합니다.
+    """
+    logger.info(f"🔐 /auth/google/token 호출됨")
+    
+    try:
+        # Google OAuth 서비스 초기화
+        google_oauth = GoogleOAuthService()
+        
+        # ID 토큰 검증 및 사용자 정보 추출
+        google_user = google_oauth.verify_id_token(request.id_token)
+        
+        if not google_user.get('email'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이메일 정보를 가져올 수 없습니다"
+            )
+        
+        if not google_user.get('email_verified'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이메일이 인증되지 않았습니다"
+            )
+        
+        google_id = google_user['sub']
+        email = google_user['email']
+        
+        async with get_db_connection() as conn:
+            # 기존 사용자 조회 (OAuth ID 또는 이메일로)
+            user = await conn.fetchrow(
+                """
+                SELECT id, email, oauth_provider, oauth_id
+                FROM users
+                WHERE (oauth_provider = 'google' AND oauth_id = $1)
+                   OR email = $2
+                """,
+                google_id, email
+            )
+            
+            if user:
+                # 기존 사용자 로그인
+                user_id = user['id']
+                
+                # OAuth 정보가 없으면 업데이트
+                if not user.get('oauth_provider'):
+                    await conn.execute(
+                        """
+                        UPDATE users
+                        SET oauth_provider = 'google',
+                            oauth_id = $1,
+                            oauth_email = $2,
+                            updated_at = NOW()
+                        WHERE id = $3
+                        """,
+                        google_id, email, user_id
+                    )
+                
+                logger.info(f"   ✅ 기존 사용자 로그인: 사용자 ID {user_id}")
+            else:
+                # 새 사용자 생성
+                user_id = await conn.fetchval(
+                    """
+                    INSERT INTO users (email, oauth_provider, oauth_id, oauth_email, locale, password_hash)
+                    VALUES ($1, 'google', $2, $3, 'ko-KR', NULL)
+                    RETURNING id
+                    """,
+                    email, google_id, email
+                )
+                logger.info(f"   ✅ 새 사용자 생성: 사용자 ID {user_id}")
+            
+            # JWT 토큰 생성
+            access_token = create_access_token(data={"sub": str(user_id)})
+            return TokenResponse(access_token=access_token)
+            
+    except ValueError as e:
+        logger.warning(f"   ❌ Google OAuth 인증 실패: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"   ❌ Google OAuth 로그인 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google 로그인 처리 중 오류가 발생했습니다"
+        )
+
+
+@router.get("/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """현재 사용자 정보 조회"""
+    return current_user
+

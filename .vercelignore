@@ -1,0 +1,80 @@
+# Mobile App (Flutter)
+mobile/
+
+# Backend (로컬 개발용)
+backend/
+
+# 문서 파일
+*.md
+!README.md
+docs/
+
+# 테스트 파일
+test/
+tests/
+*_test.py
+*_test.dart
+test_*.py
+
+# 로그 파일
+*.log
+logs/
+
+# 환경 변수 파일
+.env
+.env.local
+.env.*.local
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 가상 환경
+.venv/
+venv/
+env/
+ENV/
+
+# Flutter 빌드
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+
+# 데이터베이스 파일
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Git
+.git/
+.gitignore
+
+# 기타 설정 파일
+*.iml
+local.properties
+
