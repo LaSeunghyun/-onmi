@@ -4,6 +4,14 @@ import os
 import traceback
 from pathlib import Path
 
+# Vercel 로깅을 위한 헬퍼 함수
+def log(message, level="INFO"):
+    """Vercel에서 보이는 로깅 함수"""
+    msg = f"[{level}] {message}"
+    # stdout과 stderr 모두에 출력 (Vercel이 둘 다 캡처)
+    print(msg, file=sys.stdout, flush=True)
+    print(msg, file=sys.stderr, flush=True)
+
 # 프로젝트 루트 경로 추가
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -11,44 +19,51 @@ sys.path.insert(0, str(project_root / "backend" / "shared"))
 sys.path.insert(0, str(project_root / "backend" / "api-gateway" / "src"))
 
 # 디버깅을 위한 경로 출력
-print(f"Python path: {sys.path}", file=sys.stderr)
-print(f"Project root: {project_root}", file=sys.stderr)
-print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
+log(f"=== Vercel 서버리스 함수 시작 ===")
+log(f"Python path: {sys.path}")
+log(f"Project root: {project_root}")
+log(f"Current working directory: {os.getcwd()}")
+log(f"Python version: {sys.version}")
 
 try:
+    log("FastAPI import 시도 중...")
     from fastapi import FastAPI, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
-    print("FastAPI import 성공", file=sys.stderr)
+    log("✓ FastAPI import 성공")
 except Exception as e:
-    print(f"FastAPI import error: {e}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ FastAPI import error: {e}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 try:
+    log("Settings 모듈 import 시도 중...")
     # 설정 모듈 import
     from config.settings import settings
-    print("Settings import 성공", file=sys.stderr)
+    log("✓ Settings import 성공")
+    log(f"Database URL 설정됨: {bool(settings.database_url or settings.supabase_db_url)}")
 except Exception as e:
-    print(f"Settings import error: {e}", file=sys.stderr)
-    print(f"Current sys.path: {sys.path}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ Settings import error: {e}", "ERROR")
+    log(f"Current sys.path: {sys.path}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 try:
+    log("Routes 모듈 import 시도 중...")
     # 라우터 import - sys.path에 backend/api-gateway/src가 추가되어 있으므로 routes로 직접 import
     from routes import auth, keywords, feed, articles, stats, share, notifications
-    print("Routes import 성공", file=sys.stderr)
+    log("✓ Routes import 성공")
 except Exception as e:
-    print(f"Routes import error: {e}", file=sys.stderr)
-    print(f"Trying to import from: backend/api-gateway/src/routes", file=sys.stderr)
-    print(f"Current sys.path: {sys.path}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ Routes import error: {e}", "ERROR")
+    log(f"Trying to import from: backend/api-gateway/src/routes", "ERROR")
+    log(f"Current sys.path: {sys.path}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 # 환경 변수 검증
 def validate_environment():
     """필수 환경 변수 검증"""
+    log("환경 변수 검증 시작...")
     missing_vars = []
     
     # DATABASE_URL 또는 SUPABASE_DB_URL 중 하나는 필수
@@ -57,35 +72,37 @@ def validate_environment():
     
     # JWT_SECRET은 필수 (기본값이 있지만 프로덕션에서는 변경 필요)
     if not settings.jwt_secret or settings.jwt_secret == "your-secret-key-change-in-production":
-        print("경고: JWT_SECRET이 기본값으로 설정되어 있습니다. 프로덕션에서는 변경하세요.", file=sys.stderr)
+        log("경고: JWT_SECRET이 기본값으로 설정되어 있습니다. 프로덕션에서는 변경하세요.", "WARN")
     
     if missing_vars:
         error_msg = f"필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}"
-        print(error_msg, file=sys.stderr)
+        log(error_msg, "ERROR")
         raise ValueError(error_msg)
     
-    print("환경 변수 검증 완료", file=sys.stderr)
+    log("✓ 환경 변수 검증 완료")
 
 try:
     validate_environment()
 except Exception as e:
-    print(f"환경 변수 검증 실패: {e}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ 환경 변수 검증 실패: {e}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 try:
+    log("FastAPI 앱 생성 시도 중...")
     app = FastAPI(
         title="#onmi API Gateway",
         description="키워드 기반 뉴스 트래킹 & 감성분석 API",
         version="1.0.0"
     )
-    print("FastAPI 앱 생성 성공", file=sys.stderr)
+    log("✓ FastAPI 앱 생성 성공")
 except Exception as e:
-    print(f"FastAPI 앱 생성 실패: {e}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ FastAPI 앱 생성 실패: {e}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 try:
+    log("CORS 미들웨어 추가 시도 중...")
     # CORS 설정
     app.add_middleware(
         CORSMiddleware,
@@ -94,13 +111,14 @@ try:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    print("CORS 미들웨어 추가 성공", file=sys.stderr)
+    log("✓ CORS 미들웨어 추가 성공")
 except Exception as e:
-    print(f"CORS 미들웨어 추가 실패: {e}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ CORS 미들웨어 추가 실패: {e}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 try:
+    log("라우터 등록 시도 중...")
     # 라우터 등록
     app.include_router(auth.router, prefix="/auth", tags=["인증"])
     app.include_router(keywords.router, prefix="/keywords", tags=["키워드"])
@@ -109,10 +127,10 @@ try:
     app.include_router(stats.router, prefix="/stats", tags=["통계"])
     app.include_router(share.router, prefix="/share", tags=["공유"])
     app.include_router(notifications.router, prefix="/notifications", tags=["알림"])
-    print("라우터 등록 완료", file=sys.stderr)
+    log("✓ 라우터 등록 완료")
 except Exception as e:
-    print(f"라우터 등록 실패: {e}", file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+    log(f"✗ 라우터 등록 실패: {e}", "ERROR")
+    log(f"Traceback: {traceback.format_exc()}", "ERROR")
     raise
 
 
@@ -164,7 +182,7 @@ async def cron_crawl(request: Request):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"Cron job error: {error_trace}", file=sys.stderr)
+        log(f"✗ Cron job error: {error_trace}", "ERROR")
         return JSONResponse(
             status_code=500,
             content={
@@ -174,6 +192,24 @@ async def cron_crawl(request: Request):
         )
 
 
+# 전역 예외 핸들러 추가 (모든 미처리 예외를 잡기 위해)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """전역 예외 핸들러 - 모든 미처리 예외를 로깅하고 적절한 응답 반환"""
+    error_trace = traceback.format_exc()
+    log(f"✗ 전역 예외 발생: {type(exc).__name__}: {str(exc)}", "ERROR")
+    log(f"Request: {request.method} {request.url}", "ERROR")
+    log(f"Traceback: {error_trace}", "ERROR")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "error": str(exc),
+            "type": type(exc).__name__
+        }
+    )
+
 # Vercel은 자동으로 ASGI 앱을 감지하므로 별도 핸들러 불필요
-print("Vercel 서버리스 함수 초기화 완료", file=sys.stderr)
+log("=== Vercel 서버리스 함수 초기화 완료 ===")
 
