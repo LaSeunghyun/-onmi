@@ -63,12 +63,6 @@ class Settings(BaseSettings):
         description="시간당 요청 제한"
     )
     
-    # RSS Sources
-    rss_sources: str = Field(
-        default="https://rss.cnn.com/rss/edition.rss,https://feeds.bbci.co.uk/news/rss.xml",
-        description="RSS 소스 URL 목록 (쉼표로 구분)"
-    )
-    
     # Redis (선택사항 - 필요시 Upstash 사용)
     redis_url: Optional[str] = Field(
         default=None,
@@ -150,11 +144,6 @@ class Settings(BaseSettings):
             return supabase_db_url
         # 둘 다 없으면 기본값 반환
         return "postgresql://onmi:onmi_dev_password@localhost:5432/onmi_db"
-    
-    @property
-    def rss_sources_list(self) -> List[str]:
-        """RSS 소스 목록을 리스트로 반환"""
-        return [url.strip() for url in self.rss_sources.split(",") if url.strip()]
 
 
 settings = Settings()

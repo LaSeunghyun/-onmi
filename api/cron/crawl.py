@@ -1,4 +1,4 @@
-"""Vercel Cron Job - RSS 크롤링 작업"""
+"""Vercel Cron Job - Google CSE 크롤링 작업"""
 import sys
 import os
 from pathlib import Path
@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root / "backend" / "nlp-service" / "src"))
 
 import asyncpg
 from config.settings import settings
-from collectors.rss_collector import RSSCollector
+from collectors.google_cse_collector import GoogleCSECollector
 from processors.deduplicator import Deduplicator
 from sentiment.rule_based import RuleBasedSentimentAnalyzer
 
@@ -23,7 +23,7 @@ class CrawlerWorker:
     """크롤러 워커 클래스"""
     
     def __init__(self):
-        self.rss_collector = RSSCollector()
+        self.cse_collector = GoogleCSECollector()
         self.deduplicator = Deduplicator()
         self.sentiment_analyzer = RuleBasedSentimentAnalyzer()
     
@@ -31,17 +31,12 @@ class CrawlerWorker:
         """키워드별 기사 수집 및 처리"""
         print(f"키워드 수집 시작: {keyword_text} (ID: {keyword_id})")
         
-        # RSS 소스에서 기사 수집
-        all_articles = []
-        for rss_url in settings.rss_sources_list:
-            articles = self.rss_collector.collect_from_rss(rss_url)
-            # 키워드 매칭 필터링
-            matched_articles = [
-                article for article in articles
-                if keyword_text.lower() in article['title'].lower() or
-                   keyword_text.lower() in article.get('snippet', '').lower()
-            ]
-            all_articles.extend(matched_articles)
+        # Google CSE로 키워드 검색
+        all_articles = self.cse_collector.search_by_keyword(
+            keyword_text,
+            date_range=None,  # Cron Job은 전체 기간 검색
+            max_results=100
+        )
         
         # 중복 제거
         unique_articles = self.deduplicator.filter_duplicates(all_articles)

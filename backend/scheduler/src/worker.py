@@ -14,7 +14,7 @@ from config.settings import settings
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../ingestor/src'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../nlp-service/src'))
 
-from collectors.rss_collector import RSSCollector
+from collectors.google_cse_collector import GoogleCSECollector
 from processors.deduplicator import Deduplicator
 from sentiment.rule_based import RuleBasedSentimentAnalyzer
 
@@ -23,7 +23,7 @@ class CrawlerWorker:
     """크롤러 워커 클래스"""
     
     def __init__(self):
-        self.rss_collector = RSSCollector()
+        self.cse_collector = GoogleCSECollector()
         self.deduplicator = Deduplicator()
         self.sentiment_analyzer = RuleBasedSentimentAnalyzer()
     
@@ -31,17 +31,12 @@ class CrawlerWorker:
         """키워드별 기사 수집 및 처리"""
         print(f"키워드 수집 시작: {keyword_text} (ID: {keyword_id})")
         
-        # RSS 소스에서 기사 수집
-        all_articles = []
-        for rss_url in settings.rss_sources_list:
-            articles = self.rss_collector.collect_from_rss(rss_url)
-            # 키워드 매칭 필터링
-            matched_articles = [
-                article for article in articles
-                if keyword_text.lower() in article['title'].lower() or
-                   keyword_text.lower() in article.get('snippet', '').lower()
-            ]
-            all_articles.extend(matched_articles)
+        # Google CSE로 키워드 검색
+        all_articles = self.cse_collector.search_by_keyword(
+            keyword_text,
+            date_range=None,  # 스케줄러는 전체 기간 검색
+            max_results=100
+        )
         
         # 중복 제거
         unique_articles = self.deduplicator.filter_duplicates(all_articles)
