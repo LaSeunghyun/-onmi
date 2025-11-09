@@ -20,11 +20,32 @@ class GoogleCSECollector:
     
     def __init__(self, timeout: int = 10):
         self.timeout = timeout
-        self.api_key = settings.google_cse_api_key
-        self.cx = settings.google_cse_cx
-        
-        if not self.api_key or not self.cx:
-            raise ValueError("GOOGLE_CSE_API_KEY와 GOOGLE_CSE_CX가 설정되어 있어야 합니다.")
+        self._api_key = None
+        self._cx = None
+        self._initialized = False
+    
+    def _ensure_initialized(self):
+        """초기화 확인 및 실행 (lazy initialization)"""
+        if not self._initialized:
+            self._api_key = settings.google_cse_api_key
+            self._cx = settings.google_cse_cx
+            
+            if not self._api_key or not self._cx:
+                raise ValueError("GOOGLE_CSE_API_KEY와 GOOGLE_CSE_CX가 설정되어 있어야 합니다.")
+            
+            self._initialized = True
+    
+    @property
+    def api_key(self):
+        """API 키 (lazy initialization)"""
+        self._ensure_initialized()
+        return self._api_key
+    
+    @property
+    def cx(self):
+        """Custom Search Engine ID (lazy initialization)"""
+        self._ensure_initialized()
+        return self._cx
     
     def normalize_url(self, url: str) -> str:
         """URL 정규화"""
@@ -130,10 +151,13 @@ class GoogleCSECollector:
         start_index = 1
         while len(articles) < max_results:
             try:
+                # 초기화 확인
+                self._ensure_initialized()
+                
                 # API 요청 파라미터
                 params = {
-                    'key': self.api_key,
-                    'cx': self.cx,
+                    'key': self._api_key,
+                    'cx': self._cx,
                     'q': keyword,
                     'num': self.MAX_RESULTS_PER_QUERY,
                     'start': start_index
