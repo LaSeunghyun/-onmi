@@ -21,11 +21,9 @@
   },
   "functions": {
     "api/index.py": {
-      "runtime": "@vercel/python",
       "maxDuration": 30
     },
     "api/cron/crawl.py": {
-      "runtime": "@vercel/python",
       "maxDuration": 300
     }
   },
