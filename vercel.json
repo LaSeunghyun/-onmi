@@ -1,15 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/cron/crawl.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
     {
       "src": "/api/cron/crawl",
@@ -31,9 +21,11 @@
   },
   "functions": {
     "api/index.py": {
+      "runtime": "@vercel/python",
       "maxDuration": 30
     },
     "api/cron/crawl.py": {
+      "runtime": "@vercel/python",
       "maxDuration": 300
     }
   },
