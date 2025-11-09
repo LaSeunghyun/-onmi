@@ -1,6 +1,7 @@
 """Vercel 서버리스 함수 진입점 - FastAPI 앱"""
 import sys
 import os
+import traceback
 from pathlib import Path
 
 # 프로젝트 루트 경로 추가
@@ -9,15 +10,30 @@ sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "backend" / "shared"))
 sys.path.insert(0, str(project_root / "backend" / "api-gateway" / "src"))
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+try:
+    from fastapi import FastAPI, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+except Exception as e:
+    print(f"FastAPI import error: {e}", file=sys.stderr)
+    print(traceback.format_exc(), file=sys.stderr)
+    raise
 
-# 설정 모듈 import
-from config.settings import settings
+try:
+    # 설정 모듈 import
+    from config.settings import settings
+except Exception as e:
+    print(f"Settings import error: {e}", file=sys.stderr)
+    print(traceback.format_exc(), file=sys.stderr)
+    raise
 
-# 라우터 import
-from routes import auth, keywords, feed, articles, stats, share, notifications
+try:
+    # 라우터 import
+    from routes import auth, keywords, feed, articles, stats, share, notifications
+except Exception as e:
+    print(f"Routes import error: {e}", file=sys.stderr)
+    print(traceback.format_exc(), file=sys.stderr)
+    raise
 
 app = FastAPI(
     title="#onmi API Gateway",
