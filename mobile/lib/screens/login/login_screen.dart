@@ -350,7 +350,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                                // Google 로그인 텍스트 - 정확한 위치 (left: 52.38px from card edge, 패딩 고려)
+                                // Google 로그인/회원가입 텍스트 - 정확한 위치 (left: 52.38px from card edge, 패딩 고려)
                                 Positioned(
                                   left: 52.38, // 버튼 컨테이너 내부에서의 위치 (패딩 고려 불필요)
                                   top: 12,
@@ -366,9 +366,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                               ),
                                             ),
                                           )
-                                        : const Text(
-                                            'Google 계정으로 로그인',
-                                            style: TextStyle(
+                                        : Text(
+                                            _isSignUp ? 'Google 계정으로 회원가입' : 'Google 계정으로 로그인',
+                                            style: const TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                               color: Color(0xFF364153),
@@ -384,7 +384,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: Colors.transparent,
                                     child: InkWell(
                                       onTap: authState.isLoading ? null : () async {
-                                        await ref.read(authProvider.notifier).signInWithGoogle();
+                                        if (_isSignUp) {
+                                          await ref.read(authProvider.notifier).signUpWithGoogle();
+                                        } else {
+                                          await ref.read(authProvider.notifier).signInWithGoogle();
+                                        }
                                         if (mounted) {
                                           final newAuthState = ref.read(authProvider);
                                           if (newAuthState.error != null) {

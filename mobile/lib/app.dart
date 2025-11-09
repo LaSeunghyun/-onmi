@@ -21,6 +21,13 @@ class OnmiApp extends ConsumerWidget {
         ),
         useMaterial3: true,
       ),
+      // 에러 발생 시 더 나은 에러 화면 표시
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: child ?? const SizedBox(),
+        );
+      },
       home: authState.isAuthenticated
           ? const HomeScreen()
           : const LoginScreen(),

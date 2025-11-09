@@ -94,10 +94,66 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(user: user, isLoading: false);
     } catch (e) {
       String errorMessage = 'Google 로그인에 실패했습니다';
-      if (e.toString().contains('network')) {
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('network') || errorString.contains('connection')) {
         errorMessage = '네트워크 연결을 확인해주세요';
-      } else if (e.toString().contains('401')) {
+      } else if (errorString.contains('401') || errorString.contains('unauthorized')) {
         errorMessage = 'Google 로그인 인증에 실패했습니다';
+      } else if (errorString.contains('sign_in_cancelled') || errorString.contains('cancelled')) {
+        errorMessage = '로그인이 취소되었습니다';
+        state = state.copyWith(isLoading: false, error: null);
+        return;
+      } else if (errorString.contains('sign_in_failed')) {
+        errorMessage = 'Google 로그인 설정을 확인해주세요';
+      }
+      state = state.copyWith(isLoading: false, error: errorMessage);
+    }
+  }
+
+  Future<void> signUpWithGoogle() async {
+    // Google 회원가입은 로그인과 동일한 프로세스입니다
+    // 백엔드에서 자동으로 사용자가 없으면 생성하고, 있으면 로그인합니다
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      // Google 로그인 초기화
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+      
+      // Google 로그인 실행
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      
+      if (googleUser == null) {
+        // 사용자가 로그인 취소
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+      
+      // 인증 정보 가져오기
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      if (googleAuth.idToken == null) {
+        throw Exception('Google ID 토큰을 가져올 수 없습니다');
+      }
+      
+      // 백엔드에 ID 토큰 전송하여 회원가입/로그인
+      // 백엔드가 자동으로 사용자가 없으면 생성하고, 있으면 로그인합니다
+      final token = await _apiService.signInWithGoogle(googleAuth.idToken!);
+      final user = await _apiService.getCurrentUser(token);
+      state = state.copyWith(user: user, isLoading: false);
+    } catch (e) {
+      String errorMessage = 'Google 회원가입에 실패했습니다';
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('network') || errorString.contains('connection')) {
+        errorMessage = '네트워크 연결을 확인해주세요';
+      } else if (errorString.contains('401') || errorString.contains('unauthorized')) {
+        errorMessage = 'Google 인증에 실패했습니다';
+      } else if (errorString.contains('sign_in_cancelled') || errorString.contains('cancelled')) {
+        errorMessage = '회원가입이 취소되었습니다';
+        state = state.copyWith(isLoading: false, error: null);
+        return;
+      } else if (errorString.contains('sign_in_failed')) {
+        errorMessage = 'Google 로그인 설정을 확인해주세요';
       }
       state = state.copyWith(isLoading: false, error: errorMessage);
     }
