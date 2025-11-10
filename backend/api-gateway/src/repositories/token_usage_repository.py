@@ -40,23 +40,54 @@ class TokenUsageRepository:
     async def get_today_usage() -> Dict:
         """오늘의 토큰 사용량 조회"""
         today = date.today()
-        async with get_db_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT date, total_tokens_used, input_tokens, output_tokens, updated_at
-                FROM token_usage
-                WHERE date = $1
-                """,
-                today
-            )
-            if row:
+        try:
+            async with get_db_connection() as conn:
+                # 테이블 존재 여부 확인
+                table_exists = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'token_usage'
+                    )
+                    """
+                )
+                
+                if not table_exists:
+                    # 테이블이 없으면 기본값 반환
+                    return {
+                        'date': today,
+                        'total_tokens_used': 0,
+                        'input_tokens': 0,
+                        'output_tokens': 0,
+                        'updated_at': None
+                    }
+                
+                row = await conn.fetchrow(
+                    """
+                    SELECT date, total_tokens_used, input_tokens, output_tokens, updated_at
+                    FROM token_usage
+                    WHERE date = $1
+                    """,
+                    today
+                )
+                if row:
+                    return {
+                        'date': row['date'],
+                        'total_tokens_used': row['total_tokens_used'] or 0,
+                        'input_tokens': row['input_tokens'] or 0,
+                        'output_tokens': row['output_tokens'] or 0,
+                        'updated_at': row['updated_at']
+                    }
                 return {
-                    'date': row['date'],
-                    'total_tokens_used': row['total_tokens_used'] or 0,
-                    'input_tokens': row['input_tokens'] or 0,
-                    'output_tokens': row['output_tokens'] or 0,
-                    'updated_at': row['updated_at']
+                    'date': today,
+                    'total_tokens_used': 0,
+                    'input_tokens': 0,
+                    'output_tokens': 0,
+                    'updated_at': None
                 }
+        except Exception:
+            # 모든 예외를 잡아서 기본값 반환
             return {
                 'date': today,
                 'total_tokens_used': 0,
@@ -69,25 +100,43 @@ class TokenUsageRepository:
     async def get_hourly_average_for_today() -> float:
         """오늘의 시간당 평균 사용량 계산"""
         today = date.today()
-        async with get_db_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT total_tokens_used, updated_at
-                FROM token_usage
-                WHERE date = $1
-                """,
-                today
-            )
-            
-            if not row or not row['total_tokens_used']:
-                return 0.0
-            
-            # 현재 시간까지의 시간당 평균 계산
-            now = datetime.now()
-            start_of_day = datetime.combine(today, datetime.min.time())
-            hours_elapsed = max(1, (now - start_of_day).total_seconds() / 3600)
-            
-            return row['total_tokens_used'] / hours_elapsed
+        try:
+            async with get_db_connection() as conn:
+                # 테이블 존재 여부 확인
+                table_exists = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'token_usage'
+                    )
+                    """
+                )
+                
+                if not table_exists:
+                    return 0.0
+                
+                row = await conn.fetchrow(
+                    """
+                    SELECT total_tokens_used, updated_at
+                    FROM token_usage
+                    WHERE date = $1
+                    """,
+                    today
+                )
+                
+                if not row or not row['total_tokens_used']:
+                    return 0.0
+                
+                # 현재 시간까지의 시간당 평균 계산
+                now = datetime.now()
+                start_of_day = datetime.combine(today, datetime.min.time())
+                hours_elapsed = max(1, (now - start_of_day).total_seconds() / 3600)
+                
+                return row['total_tokens_used'] / hours_elapsed
+        except Exception:
+            # 모든 예외를 잡아서 기본값 반환
+            return 0.0
     
     @staticmethod
     async def get_recent_usage(days: int = 7) -> list:
@@ -97,10 +146,10 @@ class TokenUsageRepository:
                 """
                 SELECT date, total_tokens_used, input_tokens, output_tokens, updated_at
                 FROM token_usage
-                WHERE date >= CURRENT_DATE - INTERVAL '%s days'
+                WHERE date >= CURRENT_DATE - (CAST($1 AS TEXT) || ' days')::INTERVAL
                 ORDER BY date DESC
                 """,
-                days
+                str(days)
             )
             return [dict(row) for row in rows]
 

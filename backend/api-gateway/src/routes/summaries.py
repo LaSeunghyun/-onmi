@@ -14,6 +14,7 @@ from services.summary_service import SummaryService
 from services.feedback_service import FeedbackService
 from services.workflow_service import WorkflowService
 from repositories.summary_session_repository import SummarySessionRepository
+from repositories.article_repository import ArticleRepository
 
 logger = logging.getLogger(__name__)
 
@@ -42,29 +43,33 @@ async def get_daily_summary(current_user: dict = Depends(get_current_user)):
     """
     try:
         summary_service = SummaryService()
-        user_uuid = UUID(current_user["id"])
+        user_uuid = UUID(str(current_user["id"]))
         
         # 최신 일일 요약 조회
         latest_summary = await SummarySessionRepository.get_latest_daily(user_uuid)
         
         if latest_summary:
-            # 최신 요약 반환
+            # 최신 요약 반환 - 실제 기사 개수 조회
+            articles = await ArticleRepository.fetch_recent_by_user(user_uuid, limit=100)
+            articles_count = len(articles)
+            
             return SummaryResponse(
-                session_id=str(latest_summary.id),
-                summary_text=latest_summary.summary_text,
-                summary_type=latest_summary.summary_type,
-                articles_count=0,  # TODO: 실제 기사 개수 조회 필요
-                created_at=latest_summary.created_at.isoformat()
+                session_id=str(latest_summary["id"]),
+                summary_text=latest_summary["summary_text"],
+                summary_type=latest_summary["summary_type"],
+                articles_count=articles_count,
+                created_at=latest_summary["created_at"].isoformat()
             )
         else:
             # 새 요약 생성
             result = await summary_service.generate_daily_summary(user_uuid)
+            created_at = result.get('created_at', '') if result.get('created_at') else ''
             return SummaryResponse(
                 session_id=result['session_id'],
                 summary_text=result['summary_text'],
                 summary_type='daily',
                 articles_count=result['articles_count'],
-                created_at=""  # 생성 시간은 DB에서 조회 필요
+                created_at=created_at
             )
     except HTTPException:
         raise
@@ -88,7 +93,7 @@ async def get_keyword_summary(
     """
     try:
         summary_service = SummaryService()
-        user_uuid = UUID(current_user["id"])
+        user_uuid = UUID(str(current_user["id"]))
         keyword_uuid = UUID(keyword_id)
         
         # 소유권 확인
@@ -108,11 +113,11 @@ async def get_keyword_summary(
         if latest_summary:
             # 최신 요약 반환
             return SummaryResponse(
-                session_id=str(latest_summary.id),
-                summary_text=latest_summary.summary_text,
-                summary_type=latest_summary.summary_type,
+                session_id=str(latest_summary["id"]),
+                summary_text=latest_summary["summary_text"],
+                summary_type=latest_summary["summary_type"],
                 articles_count=0,  # TODO: 실제 기사 개수 조회 필요
-                created_at=latest_summary.created_at.isoformat()
+                created_at=latest_summary["created_at"].isoformat()
             )
         else:
             # 새 요약 생성
@@ -156,7 +161,7 @@ async def submit_summary_feedback(
             )
         
         workflow_service = WorkflowService()
-        user_uuid = UUID(current_user["id"])
+        user_uuid = UUID(str(current_user["id"]))
         session_uuid = UUID(summary_session_id)
         
         # 피드백 기록
