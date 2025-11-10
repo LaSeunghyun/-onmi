@@ -104,10 +104,10 @@ class DateSelector extends StatelessWidget {
                           size: 16,
                           color: Color(0xFF030213),
                         ),
-                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             dateStr,
+                            textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -127,7 +127,9 @@ class DateSelector extends StatelessWidget {
                               fontFamily: 'Noto Sans KR',
                               height: 1.43,
                             ),
-                          ),
+                          )
+                        else
+                          const SizedBox(width: 32), // "오늘" 텍스트가 없을 때 공간 확보
                       ],
                     ),
                   ),
