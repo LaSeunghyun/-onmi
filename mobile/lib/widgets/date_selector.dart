@@ -95,39 +95,30 @@ class DateSelector extends StatelessWidget {
                 child: InkWell(
                   onTap: () => _showDatePicker(context),
                   borderRadius: BorderRadius.circular(8),
-                  child: Stack(
-                    children: [
-                      // 캘린더 아이콘
-                      Positioned(
-                        left: 13,
-                        top: 10,
-                        child: const Icon(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    child: Row(
+                      children: [
+                        const Icon(
                           Icons.calendar_today,
                           size: 16,
                           color: Color(0xFF030213),
                         ),
-                      ),
-                      // 날짜 텍스트
-                      Positioned(
-                        left: 45,
-                        top: 6,
-                        child: Text(
-                          dateStr,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF030213),
-                            fontFamily: 'Noto Sans KR',
-                            height: 1.43, // leading 20px / fontSize 14px
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dateStr,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF030213),
+                              fontFamily: 'Noto Sans KR',
+                              height: 1.43, // leading 20px / fontSize 14px
+                            ),
                           ),
                         ),
-                      ),
-                      // "오늘" 텍스트 (오늘인 경우)
-                      if (isToday)
-                        Positioned(
-                          left: 163.91,
-                          top: 8,
-                          child: const Text(
+                        if (isToday)
+                          const Text(
                             '오늘',
                             style: TextStyle(
                               fontSize: 14,
@@ -137,8 +128,8 @@ class DateSelector extends StatelessWidget {
                               height: 1.43,
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

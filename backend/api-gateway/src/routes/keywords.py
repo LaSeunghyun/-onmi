@@ -1,11 +1,14 @@
 """키워드 관련 라우터"""
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
-import sys
-import os
+import json
 import logging
+import os
+import sys
+from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 from src.routes.auth import get_current_user
@@ -46,19 +49,32 @@ async def get_keywords(current_user: dict = Depends(get_current_user)):
                 """,
                 current_user["id"]
             )
-            return [
-                KeywordResponse(
-                    id=str(kw["id"]),
-                    text=kw["text"],
-                    status=kw["status"],
-                    notify_level=kw["notify_level"],
-                    auto_share_enabled=kw["auto_share_enabled"],
-                    auto_share_channels=kw["auto_share_channels"] or [],
-                    created_at=kw["created_at"],
-                    last_crawled_at=kw["last_crawled_at"]
+            keyword_list: List[KeywordResponse] = []
+            for kw in keywords:
+                raw_channels = kw["auto_share_channels"]
+                if isinstance(raw_channels, str):
+                    try:
+                        parsed_channels = json.loads(raw_channels)
+                        if not isinstance(parsed_channels, list):
+                            parsed_channels = []
+                    except json.JSONDecodeError:
+                        parsed_channels = []
+                else:
+                    parsed_channels = raw_channels or []
+
+                keyword_list.append(
+                    KeywordResponse(
+                        id=str(kw["id"]),
+                        text=kw["text"],
+                        status=kw["status"],
+                        notify_level=kw["notify_level"],
+                        auto_share_enabled=kw["auto_share_enabled"],
+                        auto_share_channels=parsed_channels,
+                        created_at=kw["created_at"],
+                        last_crawled_at=kw["last_crawled_at"],
+                    )
                 )
-                for kw in keywords
-            ]
+            return keyword_list
     except HTTPException:
         raise
     except Exception as e:
@@ -120,14 +136,24 @@ async def create_keyword(
                 """,
                 keyword_id
             )
-            
+            raw_channels = kw["auto_share_channels"]
+            if isinstance(raw_channels, str):
+                try:
+                    parsed_channels = json.loads(raw_channels)
+                    if not isinstance(parsed_channels, list):
+                        parsed_channels = []
+                except json.JSONDecodeError:
+                    parsed_channels = []
+            else:
+                parsed_channels = raw_channels or []
+
             return KeywordResponse(
                 id=str(kw["id"]),
                 text=kw["text"],
                 status=kw["status"],
                 notify_level=kw["notify_level"],
                 auto_share_enabled=kw["auto_share_enabled"],
-                auto_share_channels=kw["auto_share_channels"] or [],
+                auto_share_channels=parsed_channels,
                 created_at=kw["created_at"],
                 last_crawled_at=kw["last_crawled_at"]
             )
@@ -148,11 +174,20 @@ async def delete_keyword(
 ):
     """키워드 삭제"""
     try:
+        # UUID 유효성 검사
+        try:
+            keyword_uuid = UUID(keyword_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="유효하지 않은 키워드 ID입니다"
+            )
+        
         async with get_db_connection() as conn:
             # 소유권 확인
             keyword = await conn.fetchrow(
                 "SELECT id FROM keywords WHERE id = $1 AND user_id = $2",
-                keyword_id, current_user["id"]
+                keyword_uuid, current_user["id"]
             )
             
             if not keyword:
@@ -162,10 +197,18 @@ async def delete_keyword(
                 )
             
             # 소프트 삭제 (status 변경)
-            await conn.execute(
-                "UPDATE keywords SET status = 'deleted' WHERE id = $1",
-                keyword_id
+            result = await conn.execute(
+                "UPDATE keywords SET status = 'archived' WHERE id = $1",
+                keyword_uuid
             )
+            
+            # 업데이트 결과 확인
+            if result == "UPDATE 0":
+                logger.warning(f"키워드 삭제 실패: {keyword_id} - 업데이트된 행이 없습니다")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="키워드를 찾을 수 없습니다"
+                )
             
             return None
     except HTTPException:
@@ -174,7 +217,7 @@ async def delete_keyword(
         logger.error(f"키워드 삭제 중 오류 발생: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="키워드 삭제 중 오류가 발생했습니다"
+            detail=f"키워드 삭제 중 오류가 발생했습니다: {str(e)}"
         )
 
 

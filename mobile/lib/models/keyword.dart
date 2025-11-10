@@ -65,10 +65,14 @@ class Keyword {
       status: json['status'] as String,
       notifyLevel: json['notify_level'] ?? json['notifyLevel'] as String,
       autoShareEnabled: (json['auto_share_enabled'] ?? json['autoShareEnabled']) as bool? ?? false,
-      autoShareChannels: (json['auto_share_channels'] ?? json['autoShareChannels'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          [],
+      autoShareChannels: () {
+        final channels = json['auto_share_channels'] ?? json['autoShareChannels'];
+        if (channels == null) return <String>[];
+        if (channels is List) {
+          return channels.map((e) => e.toString()).toList();
+        }
+        return <String>[];
+      }(),
       createdAt: createdAt,
       lastCrawledAt: _parseDateTime(json['last_crawled_at'] ?? json['lastCrawledAt']),
     );

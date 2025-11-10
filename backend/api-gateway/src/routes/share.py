@@ -1,8 +1,9 @@
 """공유 관련 라우터"""
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+import json
 import sys
 import os
 import logging
@@ -81,15 +82,18 @@ async def share_article(
                 share_request.recipient
             )
             
-            # user_actions에도 기록
+            # user_actions에도 기록 (JSONB 타입에 딕셔너리를 저장하기 위해 JSON 문자열로 변환)
+            payload_dict = {"channel": share_request.channel, "recipient": share_request.recipient}
+            payload_json = json.dumps(payload_dict)
+            
             await conn.execute(
                 """
                 INSERT INTO user_actions (user_id, article_id, action, payload)
-                VALUES ($1, $2, 'share', $3)
+                VALUES ($1, $2, 'share', $3::jsonb)
                 """,
                 current_user["id"],
                 article_id,
-                {"channel": share_request.channel, "recipient": share_request.recipient}
+                payload_json
             )
             
             return {
@@ -109,8 +113,8 @@ async def share_article(
 @router.get("/history")
 async def get_share_history(
     keyword_id: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 크기"),
     current_user: dict = Depends(get_current_user)
 ):
     """공유 히스토리 조회"""

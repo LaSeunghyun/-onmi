@@ -5,11 +5,10 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
-from ..repositories import (
-    FeedbackRepository,
-    PreferenceRepository,
-    SummarySessionRepository
-)
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from repositories.feedback_repository import FeedbackRepository
+from repositories.preference_repository import PreferenceRepository
+from repositories.summary_session_repository import SummarySessionRepository
 
 
 class FeedbackService:

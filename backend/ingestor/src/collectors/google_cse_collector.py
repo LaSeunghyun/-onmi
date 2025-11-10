@@ -1,14 +1,50 @@
 """Google Custom Search API 수집기"""
 import requests
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Protocol
+from datetime import datetime
 from urllib.parse import urlparse, urlunparse
+from uuid import UUID
 import sys
 import os
 
 # 공통 설정 모듈 경로 추가
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 from config.settings import settings
+
+
+class CSEQueryLimitExceededError(Exception):
+    """Google CSE 일일 쿼리 제한을 초과했을 때 발생하는 예외"""
+
+    def __init__(self, message: str, detail: Optional[Dict] = None):
+        super().__init__(message)
+        self.detail = detail or {}
+
+
+class CSEQuotaManager(Protocol):
+    """Google CSE 쿼리 제한과 연동하기 위한 프로토콜"""
+
+    async def can_make_query(
+        self,
+        user_id: UUID,
+        keyword_id: Optional[UUID],
+        required_queries: int = 1
+    ) -> bool:
+        ...
+
+    async def get_remaining_queries(
+        self,
+        user_id: UUID,
+        keyword_id: Optional[UUID]
+    ) -> Dict[str, int]:
+        ...
+
+    async def record_usage(
+        self,
+        user_id: UUID,
+        keyword_id: Optional[UUID],
+        queries_used: int = 1
+    ) -> None:
+        ...
 
 
 class GoogleCSECollector:
@@ -62,51 +98,32 @@ class GoogleCSECollector:
         return normalized.rstrip('/')
     
     def _calculate_date_restrict(self, date_range: Optional[tuple[datetime, datetime]]) -> Optional[str]:
-        """날짜 범위를 Google CSE의 dateRestrict 형식으로 변환
-        
-        Args:
-            date_range: (시작일, 종료일) 튜플
-            
-        Returns:
-            dateRestrict 문자열 (예: "d7" = 최근 7일) 또는 None
-        """
+        """날짜 범위를 Google CSE의 dateRestrict 형식으로 변환"""
         if not date_range:
             return None
         
         start_date, end_date = date_range
         now = datetime.now()
         
-        # 종료일이 현재보다 미래인 경우 현재로 제한
         if end_date > now:
             end_date = now
         
-        # 시작일이 종료일보다 미래인 경우 None 반환
         if start_date > end_date:
             return None
         
-        # 날짜 차이 계산
-        days_diff = (end_date - start_date).days
-        
-        # Google CSE는 최근 날짜만 지원하므로, 시작일이 현재로부터 며칠 전인지 계산
         days_from_now = (now - start_date).days
         
-        # 최대 365일까지만 지원
         if days_from_now > 365:
             return "d365"
         
-        # dateRestrict 형식: "dN" (N일 전부터)
         return f"d{days_from_now}"
     
     def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        """날짜 문자열 파싱
-        
-        Google CSE API의 formattedDate 형식: "Jan 1, 2024"
-        """
+        """날짜 문자열 파싱"""
         if not date_str:
             return None
         
         try:
-            # 여러 날짜 형식 시도
             formats = [
                 "%b %d, %Y",  # Jan 1, 2024
                 "%B %d, %Y",  # January 1, 2024
@@ -124,37 +141,37 @@ class GoogleCSECollector:
         except Exception:
             return None
     
-    def search_by_keyword(
+    async def search_by_keyword(
         self,
         keyword: str,
         date_range: Optional[tuple[datetime, datetime]] = None,
-        max_results: int = 100
+        max_results: int = 100,
+        user_id: Optional[UUID] = None,
+        keyword_id: Optional[UUID] = None,
+        quota_manager: Optional[CSEQuotaManager] = None
     ) -> List[Dict]:
-        """키워드로 기사 검색
-        
-        Args:
-            keyword: 검색할 키워드
-            date_range: (시작일, 종료일) 튜플, None이면 필터링 안 함
-            max_results: 최대 결과 개수 (기본값: 100)
-            
-        Returns:
-            기사 정보 리스트
-        """
+        """키워드로 기사 검색"""
         if not keyword:
             return []
         
-        articles = []
+        articles: List[Dict] = []
         date_restrict = self._calculate_date_restrict(date_range)
         max_results = min(max_results, self.MAX_TOTAL_RESULTS)
         
-        # 페이지네이션 처리
         start_index = 1
         while len(articles) < max_results:
             try:
-                # 초기화 확인
                 self._ensure_initialized()
+
+                if quota_manager and user_id:
+                    can_query = await quota_manager.can_make_query(user_id, keyword_id)
+                    if not can_query:
+                        detail = await quota_manager.get_remaining_queries(user_id, keyword_id)
+                        raise CSEQueryLimitExceededError(
+                            "Google CSE 일일 쿼리 제한을 초과했습니다.",
+                            detail=detail
+                        )
                 
-                # API 요청 파라미터
                 params = {
                     'key': self._api_key,
                     'cx': self._cx,
@@ -163,11 +180,9 @@ class GoogleCSECollector:
                     'start': start_index
                 }
                 
-                # 날짜 범위가 있으면 추가
                 if date_restrict:
                     params['dateRestrict'] = date_restrict
                 
-                # API 호출
                 response = requests.get(
                     self.API_ENDPOINT,
                     params=params,
@@ -175,49 +190,58 @@ class GoogleCSECollector:
                 )
                 response.raise_for_status()
                 
+                if quota_manager and user_id:
+                    await quota_manager.record_usage(user_id, keyword_id, queries_used=1)
+                
                 data = response.json()
                 
-                # 결과가 없으면 종료
                 if 'items' not in data or not data['items']:
                     break
                 
-                # 기사 정보 추출
                 for item in data['items']:
-                    # URL 정규화
                     normalized_url = self.normalize_url(item.get('link', ''))
-                    
-                    # 날짜 파싱
                     published_at = self._parse_date(item.get('formattedDate'))
                     
-                    # 날짜 범위 필터링 (API의 dateRestrict가 정확하지 않을 수 있으므로 추가 필터링)
                     if date_range and published_at:
                         start_date, end_date = date_range
                         if not (start_date <= published_at <= end_date):
                             continue
                     
-                    # 기사 정보 구성
+                    display_link = item.get('displayLink', '')
+                    if isinstance(display_link, dict):
+                        source = 'Unknown'
+                    elif isinstance(display_link, str):
+                        source = display_link or 'Unknown'
+                    else:
+                        source = str(display_link) if display_link else 'Unknown'
+                    
                     article = {
                         'url': normalized_url,
                         'title': item.get('title', ''),
-                        'snippet': item.get('snippet', '')[:500],  # 최대 500자
-                        'source': item.get('displayLink', 'Unknown'),
+                        'snippet': item.get('snippet', '')[:500] if item.get('snippet') else '',
+                        'source': source,
                         'published_at': published_at,
-                        'lang': 'ko'  # 기본값, 실제로는 언어 감지 필요
+                        'lang': 'ko'
                     }
                     
                     articles.append(article)
                     
-                    # 최대 결과 개수 도달 시 종료
                     if len(articles) >= max_results:
                         break
                 
-                # 다음 페이지로
                 start_index += self.MAX_RESULTS_PER_QUERY
                 
-                # 더 이상 결과가 없으면 종료
-                if start_index > data.get('queries', {}).get('request', [{}])[0].get('totalResults', 0):
+                total_results = data.get('queries', {}).get('request', [{}])[0].get('totalResults', 0)
+                try:
+                    total_results = int(total_results) if total_results else 0
+                except (ValueError, TypeError):
+                    total_results = 0
+                
+                if start_index > total_results:
                     break
                 
+            except CSEQueryLimitExceededError:
+                raise
             except requests.exceptions.RequestException as e:
                 print(f"Google CSE API 요청 오류: {e}")
                 break
@@ -226,4 +250,3 @@ class GoogleCSECollector:
                 break
         
         return articles
-

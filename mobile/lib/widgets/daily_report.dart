@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/article.dart';
+import '../utils/responsive.dart';
 
 class DailyReport extends StatelessWidget {
   final DateTime date;
@@ -13,10 +13,6 @@ class DailyReport extends StatelessWidget {
     required this.articles,
     this.onArticleTap,
   });
-
-  String _formatDate(DateTime date) {
-    return DateFormat('yyyy년 M월 d일', 'ko_KR').format(date);
-  }
 
   String _formatTime(DateTime? dateTime) {
     if (dateTime == null) return '';
@@ -61,35 +57,14 @@ class DailyReport extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              _formatDate(date),
-              style: const TextStyle(
-                color: Color(0xFF6A7282),
-                fontSize: 16,
-                fontFamily: 'Noto Sans KR',
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF4F0),
-                border: Border.all(color: const Color(0xFFFF6B35)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '${articles.length}개의 이슈',
-                style: const TextStyle(
-                  color: Color(0xFFFF6B35),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'Noto Sans KR',
-                ),
-              ),
-            ),
-          ],
+        const Text(
+          '오늘의 인사이트',
+          style: TextStyle(
+            color: Color(0xFF030213),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            fontFamily: 'Noto Sans KR',
+          ),
         ),
         const SizedBox(height: 12),
         if (articles.isEmpty)
@@ -151,7 +126,7 @@ class _ArticleCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(Responsive.getPadding(context) * 1.5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

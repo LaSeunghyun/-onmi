@@ -6,6 +6,10 @@
       "dest": "api/cron/crawl.py"
     },
     {
+      "src": "/api/cron/daily-report",
+      "dest": "api/cron/daily-report.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "api/index.py"
     }
@@ -14,6 +18,10 @@
     {
       "path": "/api/cron/crawl",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 * * * *"
     }
   ],
   "env": {
@@ -26,6 +34,11 @@
       "excludeFiles": "{backend/**/venv/**,backend/**/__pycache__/**}"
     },
     "api/cron/crawl.py": {
+      "maxDuration": 300,
+      "includeFiles": "{backend/shared/**,backend/api-gateway/src/**,config/**}",
+      "excludeFiles": "{backend/**/venv/**,backend/**/__pycache__/**}"
+    },
+    "api/cron/daily-report.py": {
       "maxDuration": 300,
       "includeFiles": "{backend/shared/**,backend/api-gateway/src/**,config/**}",
       "excludeFiles": "{backend/**/venv/**,backend/**/__pycache__/**}"

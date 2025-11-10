@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import json
 import sys
 import os
 import logging
@@ -77,6 +78,9 @@ async def get_article(
                 article_id, current_user["id"]
             )
             
+            # sentiment_score가 None일 수 있으므로 기본값 처리
+            sentiment_score = float(article["sentiment_score"]) if article["sentiment_score"] is not None else 0.0
+            
             return ArticleDetail(
                 id=str(article["id"]),
                 title=article["title"],
@@ -86,7 +90,7 @@ async def get_article(
                 published_at=article["published_at"],
                 thumbnail_url_hash=article["thumbnail_url_hash"],
                 sentiment_label=article["sentiment_label"],
-                sentiment_score=float(article["sentiment_score"]),
+                sentiment_score=sentiment_score,
                 sentiment_rationale=article["sentiment_rationale"],
                 keywords=[kw["text"] for kw in keywords]
             )
@@ -133,15 +137,18 @@ async def submit_feedback(
                     detail="기사를 찾을 수 없습니다"
                 )
             
-            # 피드백 저장
+            # 피드백 저장 (JSONB 타입에 딕셔너리를 저장하기 위해 JSON 문자열로 변환)
+            payload_dict = {"label": feedback.label, "comment": feedback.comment}
+            payload_json = json.dumps(payload_dict)
+            
             await conn.execute(
                 """
                 INSERT INTO user_actions (user_id, article_id, action, payload)
-                VALUES ($1, $2, 'feedback', $3)
+                VALUES ($1, $2, 'feedback', $3::jsonb)
                 """,
                 current_user["id"],
                 article_id,
-                {"label": feedback.label, "comment": feedback.comment}
+                payload_json
             )
             
             return {"message": "피드백이 제출되었습니다"}

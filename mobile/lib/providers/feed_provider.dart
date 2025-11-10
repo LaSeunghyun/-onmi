@@ -36,7 +36,7 @@ class FeedState {
 }
 
 final feedProvider = StateNotifierProvider<FeedNotifier, FeedState>((ref) {
-  return FeedNotifier(ApiService());
+  return FeedNotifier(getApiService());
 });
 
 class FeedNotifier extends StateNotifier<FeedState> {

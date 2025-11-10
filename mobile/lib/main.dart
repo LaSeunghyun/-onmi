@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'dart:ui';
 import 'app.dart';
 import 'services/cache_service.dart';
@@ -26,6 +27,9 @@ void main() async {
   try {
     // Hive 초기화
     await Hive.initFlutter();
+    
+    // intl 로케일 데이터 초기화 (한국어)
+    await initializeDateFormatting('ko_KR', null);
     
     // 캐시 서비스 초기화
     final cacheService = CacheService();

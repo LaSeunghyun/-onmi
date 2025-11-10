@@ -32,6 +32,12 @@ onmi/
 - 피드백 시스템: 좋아요/싫어요 (1-5점) 피드백 제출
 - 피드백 기반 자동 개선: 사용자 피드백을 반영하여 요약 품질 지속 개선
 
+### Google CSE 쿼리 제한 관리
+- 일일 100건 무료 쿼리를 활성 사용자 수로 균등 분배
+- 사용자별 보유 키워드 개수에 따라 키워드별 최대 사용량 계산
+- `/stats/cse-query-usage` API로 잔여 쿼리 수 조회
+- 모바일 홈 화면에서 "조회 가능 쿼리수" 실시간 표시
+
 ## 기술 스택
 
 ### 프론트엔드
@@ -112,6 +118,11 @@ flutter run
 
 **참고:** Flutter 앱에서 API에 연결하려면 `mobile/lib/services/api_service.dart`의 `baseUrl`을 확인하세요.
 
+### 설정 화면 저장 절차
+- 설정 탭에서는 키워드 추가·삭제 및 일일 리포트 알림 시간을 수정할 수 있습니다.
+- 변경 사항은 `저장` 버튼을 눌렀을 때 한 번에 서버로 반영되며, 버튼은 변경 내용이 있을 때에만 파란색으로 활성화됩니다.
+- 저장이 완료되면 사용자별 키워드 목록과 알림 시간이 즉시 동기화되어 홈 화면 및 요약 데이터에 반영됩니다.
+
 ## API 엔드포인트
 
 ### 키워드 관리
@@ -119,11 +130,16 @@ flutter run
 - `POST /keywords` - 키워드 추가
 - `DELETE /keywords/{keyword_id}` - 키워드 삭제
 - `POST /keywords/{keyword_id}/collect` - 수동 수집 실행
+- 키워드 상태 플로우: 기본 `active` → (필요 시) `inactive` → 삭제 시 `archived` 로 전환되며, `archived` 상태는 목록에서 제외됩니다.
 
 ### 요약 및 피드백
 - `GET /summaries/daily` - 일일 요약 조회
 - `GET /summaries/keywords/{keyword_id}` - 키워드별 요약 조회
 - `POST /summaries/{summary_session_id}/feedback` - 피드백 제출
+
+### 통계 & 한도
+- `GET /stats/token-usage` - 시스템 전체 토큰 사용량 요약
+- `GET /stats/cse-query-usage` - Google CSE 잔여 쿼리 수 조회 (`keyword_id` 쿼리 파라미터로 키워드별 한도 확인 가능)
 
 ### 수동 수집 API 사용법
 
@@ -171,12 +187,15 @@ Content-Type: application/json
 ```bash
 # 마이그레이션 실행
 docker exec -i onmi-postgres psql -U onmi -d onmi_db < backend/shared/database/migrations/002_add_fetch_history_summary.sql
+docker exec -i onmi-postgres psql -U onmi -d onmi_db < backend/shared/database/migrations/007_add_cse_query_usage.sql
 ```
 
 ## 문서
 
 - [워크플로우 문서](docs/workflow.md) - 시스템 워크플로우 상세 설명
 - [수집 및 피드백 로직](docs/fetch_feedback_logic.md) - 기간 계산 및 피드백 기반 개선 메커니즘
+- [설정 저장 플로우](docs/settings_persistence.md) - 키워드·알림 설정 저장 및 동기화 절차
+- [Google CSE 쿼리 제한 정책](docs/cse_query_limit.md) - 일일 쿼리 배분 및 모니터링 로직
 
 ## Vercel 배포 체크리스트
 

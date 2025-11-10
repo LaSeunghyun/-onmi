@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -14,6 +15,16 @@ class OnmiApp extends ConsumerWidget {
     return MaterialApp(
       title: '#onmi',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('ko', 'KR'),
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ko', 'KR'),
+        Locale('en', 'US'),
+      ],
       theme: ThemeData(
         primaryColor: const Color(0xFFFF6B35),
         colorScheme: ColorScheme.fromSeed(

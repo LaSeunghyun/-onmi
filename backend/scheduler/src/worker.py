@@ -5,6 +5,7 @@ import sys
 import os
 from datetime import datetime, timedelta
 from typing import List
+from uuid import UUID
 
 # 공통 모듈 경로 추가
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../shared'))
@@ -13,10 +14,15 @@ from config.settings import settings
 # 서비스 모듈 경로 추가
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../ingestor/src'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../nlp-service/src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../api-gateway/src'))
 
-from collectors.google_cse_collector import GoogleCSECollector
+from collectors.google_cse_collector import (
+    GoogleCSECollector,
+    CSEQueryLimitExceededError,
+)
 from processors.deduplicator import Deduplicator
 from sentiment.rule_based import RuleBasedSentimentAnalyzer
+from services.cse_query_limit_service import CSEQueryLimitService
 
 
 class CrawlerWorker:
@@ -26,17 +32,26 @@ class CrawlerWorker:
         self.cse_collector = GoogleCSECollector()
         self.deduplicator = Deduplicator()
         self.sentiment_analyzer = RuleBasedSentimentAnalyzer()
+        self.quota_service = CSEQueryLimitService()
     
-    async def crawl_keyword(self, keyword_id: str, keyword_text: str, db_conn):
+    async def crawl_keyword(self, keyword_id: UUID, user_id: UUID, keyword_text: str, db_conn):
         """키워드별 기사 수집 및 처리"""
         print(f"키워드 수집 시작: {keyword_text} (ID: {keyword_id})")
         
         # Google CSE로 키워드 검색
-        all_articles = self.cse_collector.search_by_keyword(
-            keyword_text,
-            date_range=None,  # 스케줄러는 전체 기간 검색
-            max_results=100
-        )
+        try:
+            all_articles = await self.cse_collector.search_by_keyword(
+                keyword_text,
+                date_range=None,  # 스케줄러는 전체 기간 검색
+                max_results=100,
+                user_id=user_id,
+                keyword_id=keyword_id,
+                quota_manager=self.quota_service
+            )
+        except CSEQueryLimitExceededError as exc:
+            detail = getattr(exc, "detail", {})
+            print(f"쿼리 제한 초과: {keyword_text} - detail={detail}")
+            return 0
         
         # 중복 제거
         unique_articles = self.deduplicator.filter_duplicates(all_articles)
@@ -119,7 +134,9 @@ class CrawlerWorker:
             # 활성 키워드 조회
             keywords = await conn.fetch(
                 """
-                SELECT id, text FROM keywords WHERE status = 'active'
+                SELECT id, user_id, text
+                FROM keywords
+                WHERE status = 'active'
                 """
             )
             
@@ -129,7 +146,8 @@ class CrawlerWorker:
             for keyword in keywords:
                 try:
                     await self.crawl_keyword(
-                        str(keyword['id']),
+                        keyword['id'],
+                        keyword['user_id'],
                         keyword['text'],
                         conn
                     )

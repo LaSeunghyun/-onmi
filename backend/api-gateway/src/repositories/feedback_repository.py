@@ -5,8 +5,9 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from database.connection import get_db_connection
-from ..models.feedback import Feedback
+from models.feedback import Feedback
 
 
 class FeedbackRepository:

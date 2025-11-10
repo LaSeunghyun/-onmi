@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class KeywordInput extends StatefulWidget {
-  final Function(String) onAddKeyword;
+  final Future<void> Function(String) onAddKeyword;
   final bool disabled;
 
   const KeywordInput({
@@ -16,18 +16,37 @@ class KeywordInput extends StatefulWidget {
 
 class _KeywordInputState extends State<KeywordInput> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _isSubmitting = false;
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     final keyword = _controller.text.trim();
-    if (keyword.isNotEmpty && !widget.disabled) {
-      widget.onAddKeyword(keyword);
-      _controller.clear();
+    if (keyword.isEmpty || widget.disabled || _isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await widget.onAddKeyword(keyword);
+      if (mounted) {
+        _controller.clear();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -39,12 +58,21 @@ class _KeywordInputState extends State<KeywordInput> {
           child: Container(
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F3F5).withOpacity(widget.disabled ? 0.5 : 1.0),
+              color: const Color(0xFFF3F3F5).withOpacity(
+                widget.disabled || _isSubmitting ? 0.5 : 1.0,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: TextField(
               controller: _controller,
-              enabled: !widget.disabled,
+              focusNode: _focusNode,
+              enabled: !widget.disabled && !_isSubmitting,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
+              enableInteractiveSelection: true,
+              enableSuggestions: true,
+              enableIMEPersonalizedLearning: true,
+              autocorrect: false,
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF717182),
@@ -54,7 +82,7 @@ class _KeywordInputState extends State<KeywordInput> {
                 hintText: '최대 3개까지 등록 가능',
                 hintStyle: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF717182),
+                  color: const Color(0xFF717182),
                   fontFamily: 'Noto Sans KR',
                 ),
                 border: InputBorder.none,
@@ -63,7 +91,11 @@ class _KeywordInputState extends State<KeywordInput> {
                   vertical: 4,
                 ),
               ),
-              onSubmitted: (_) => _handleSubmit(),
+              onEditingComplete: () {
+                // 한글 조합 완료 후 포커스 해제 및 제출
+                _focusNode.unfocus();
+                _handleSubmit();
+              },
             ),
           ),
         ),
@@ -72,20 +104,31 @@ class _KeywordInputState extends State<KeywordInput> {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: const Color(0xFFFF6B35).withOpacity(widget.disabled ? 0.5 : 1.0),
+            color: const Color(0xFFFF6B35).withOpacity(
+              widget.disabled || _isSubmitting ? 0.5 : 1.0,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: widget.disabled ? null : _handleSubmit,
+              onTap: widget.disabled || _isSubmitting ? null : _handleSubmit,
               borderRadius: BorderRadius.circular(8),
-              child: const Center(
-                child: Icon(
-                  Icons.add,
-                  size: 16,
-                  color: Colors.white,
-                ),
+              child: Center(
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.add,
+                        size: 16,
+                        color: Colors.white,
+                      ),
               ),
             ),
           ),

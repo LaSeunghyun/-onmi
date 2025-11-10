@@ -110,7 +110,7 @@ async def get_feed(
                         url=a["url"],
                         published_at=a["published_at"],
                         sentiment_label=a["sentiment_label"],
-                        sentiment_score=float(a["sentiment_score"]),
+                        sentiment_score=float(a["sentiment_score"]) if a["sentiment_score"] is not None else 0.0,
                         keyword=a["keyword"]
                     )
                     for a in articles

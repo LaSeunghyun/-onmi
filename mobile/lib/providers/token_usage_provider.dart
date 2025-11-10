@@ -5,7 +5,7 @@ import '../services/token_validator.dart';
 import 'dart:async';
 
 final tokenUsageProvider = StateNotifierProvider<TokenUsageNotifier, TokenUsage?>((ref) {
-  final apiService = ApiService();
+  final apiService = getApiService();
   final validator = TokenValidator(apiService);
   return TokenUsageNotifier(validator);
 });

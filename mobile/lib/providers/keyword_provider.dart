@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 import '../services/cache_service.dart';
 
 final keywordProvider = StateNotifierProvider<KeywordNotifier, List<Keyword>>((ref) {
-  return KeywordNotifier(ApiService());
+  return KeywordNotifier(getApiService());
 });
 
 class KeywordNotifier extends StateNotifier<List<Keyword>> {

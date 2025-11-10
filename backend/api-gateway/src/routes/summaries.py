@@ -53,12 +53,15 @@ async def get_daily_summary(current_user: dict = Depends(get_current_user)):
             articles = await ArticleRepository.fetch_recent_by_user(user_uuid, limit=100)
             articles_count = len(articles)
             
+            # created_at이 None일 수 있으므로 처리
+            created_at_str = latest_summary["created_at"].isoformat() if latest_summary["created_at"] else ""
+            
             return SummaryResponse(
                 session_id=str(latest_summary["id"]),
                 summary_text=latest_summary["summary_text"],
                 summary_type=latest_summary["summary_type"],
                 articles_count=articles_count,
-                created_at=latest_summary["created_at"].isoformat()
+                created_at=created_at_str
             )
         else:
             # 새 요약 생성
@@ -92,9 +95,17 @@ async def get_keyword_summary(
     최신 요약이 없으면 새로 생성합니다.
     """
     try:
+        # UUID 변환 오류 처리
+        try:
+            user_uuid = UUID(str(current_user["id"]))
+            keyword_uuid = UUID(keyword_id)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"유효하지 않은 UUID 형식입니다: {str(e)}"
+            )
+        
         summary_service = SummaryService()
-        user_uuid = UUID(str(current_user["id"]))
-        keyword_uuid = UUID(keyword_id)
         
         # 소유권 확인
         from repositories.keyword_repository import KeywordRepository
@@ -112,22 +123,28 @@ async def get_keyword_summary(
         
         if latest_summary:
             # 최신 요약 반환
+            # created_at이 None일 수 있으므로 처리
+            created_at_str = latest_summary["created_at"].isoformat() if latest_summary["created_at"] else ""
+            
             return SummaryResponse(
                 session_id=str(latest_summary["id"]),
                 summary_text=latest_summary["summary_text"],
                 summary_type=latest_summary["summary_type"],
                 articles_count=0,  # TODO: 실제 기사 개수 조회 필요
-                created_at=latest_summary["created_at"].isoformat()
+                created_at=created_at_str
             )
         else:
             # 새 요약 생성
             result = await summary_service.generate_keyword_summary(keyword_uuid, user_uuid)
+            # created_at이 None일 수 있으므로 처리
+            created_at_str = result.get('created_at', '') if result.get('created_at') else ''
+            
             return SummaryResponse(
                 session_id=result['session_id'],
                 summary_text=result['summary_text'],
                 summary_type='keyword',
                 articles_count=result['articles_count'],
-                created_at=""  # 생성 시간은 DB에서 조회 필요
+                created_at=created_at_str
             )
     except HTTPException:
         raise
@@ -160,9 +177,17 @@ async def submit_summary_feedback(
                 detail="평점은 1-5 사이의 값이어야 합니다"
             )
         
+        # UUID 변환 오류 처리
+        try:
+            user_uuid = UUID(str(current_user["id"]))
+            session_uuid = UUID(summary_session_id)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"유효하지 않은 UUID 형식입니다: {str(e)}"
+            )
+        
         workflow_service = WorkflowService()
-        user_uuid = UUID(str(current_user["id"]))
-        session_uuid = UUID(summary_session_id)
         
         # 피드백 기록
         result = await workflow_service.record_feedback(

@@ -5,9 +5,20 @@ passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.6
 asyncpg>=0.29.0
 redis>=5.0.1
-pydantic>=2.5.0
+pydantic[email]>=2.5.0
 pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
 slowapi>=0.1.9
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+
+# Ingestor 서비스 의존성 (crawl_service에서 사용)
+simhash>=2.1.2
+feedparser>=6.0.10
+beautifulsoup4>=4.12.2
+lxml>=4.9.3
+requests>=2.31.0
+urllib3>=2.1.0
 
 

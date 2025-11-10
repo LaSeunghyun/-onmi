@@ -38,7 +38,7 @@ async def detect_negative_surge(
             
             if not keyword:
                 raise HTTPException(
-                    status_code=404,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail="키워드를 찾을 수 없습니다"
                 )
             

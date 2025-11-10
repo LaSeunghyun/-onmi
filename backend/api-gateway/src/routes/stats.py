@@ -1,8 +1,9 @@
 """통계 관련 라우터"""
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+from uuid import UUID
 import sys
 import os
 import logging
@@ -12,6 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.routes.auth import get_current_user
 from database.connection import get_db_connection
 from services.token_tracker import TokenTracker
+from services.cse_query_limit_service import CSEQueryLimitService
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,7 @@ async def get_keyword_stats(
             
             if not keyword:
                 raise HTTPException(
-                    status_code=404,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail="키워드를 찾을 수 없습니다"
                 )
             
@@ -150,6 +152,88 @@ async def get_token_usage():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="토큰 사용량을 불러오는 중 오류가 발생했습니다"
+        )
+
+
+class CSEQueryUsageResponse(BaseModel):
+    """Google CSE 쿼리 사용량 응답 모델"""
+    usage_date: str
+    user_quota: int
+    user_used: int
+    user_remaining: int
+    keyword_quota: Optional[int] = None
+    keyword_used: Optional[int] = None
+    keyword_remaining: Optional[int] = None
+    reset_at: str
+
+
+@router.get("/cse-query-usage", response_model=CSEQueryUsageResponse)
+async def get_cse_query_usage(
+    keyword_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Google CSE 쿼리 사용 가능 수 조회"""
+    try:
+        quota_service = CSEQueryLimitService()
+        user_uuid = UUID(str(current_user["id"]))
+
+        user_usage = await quota_service.get_user_available_queries(user_uuid)
+
+        response_data = {
+            "usage_date": user_usage["usage_date"],
+            "user_quota": user_usage["user_quota"],
+            "user_used": user_usage["user_used"],
+            "user_remaining": user_usage["user_remaining"],
+            "reset_at": user_usage["reset_at"],
+        }
+
+        if keyword_id:
+            try:
+                keyword_uuid = UUID(keyword_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="유효하지 않은 키워드 ID입니다"
+                )
+
+            async with get_db_connection() as conn:
+                keyword_exists = await conn.fetchval(
+                    """
+                    SELECT 1
+                    FROM keywords
+                    WHERE id = $1
+                      AND user_id = $2
+                      AND status = 'active'
+                    """,
+                    keyword_uuid,
+                    user_uuid
+                )
+
+                if not keyword_exists:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="키워드를 찾을 수 없습니다"
+                    )
+
+            keyword_usage = await quota_service.calculate_keyword_quota(
+                user_uuid,
+                keyword_uuid
+            )
+
+            response_data.update(
+                keyword_quota=keyword_usage["keyword_quota"],
+                keyword_used=keyword_usage["keyword_used"],
+                keyword_remaining=keyword_usage["keyword_remaining"],
+            )
+
+        return CSEQueryUsageResponse(**response_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CSE 쿼리 사용량 조회 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google CSE 쿼리 사용량을 불러오는 중 오류가 발생했습니다"
         )
 
 

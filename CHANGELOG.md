@@ -36,18 +36,29 @@
 - 크롤러 날짜 필터링
   - RSS 수집기에 날짜 범위 파라미터 추가
   - 크롤러 워커에 중복 기간 제외 로직 적용
+- Google CSE 쿼리 제한 관리
+  - `cse_query_usage` 테이블 및 마이그레이션 추가
+  - `CSEQueryLimitService`로 유저/키워드별 일일 쿼리 제한 계산
+  - `/stats/cse-query-usage` API로 잔여 쿼리 수 제공
+  - 모바일 홈 화면에 "조회 가능 쿼리수" 표시 및 자동 갱신
 
 ### 변경됨
 - Vercel Python 함수 번들이 `backend/shared/**`, `backend/api-gateway/src/**`, `config/**`를 포함하고 불필요한 캐시·가상환경 파일을 제외하도록 `vercel.json`을 조정
 - `api/index.py`가 경로 존재 여부를 검사하고 중복 삽입을 방지하는 로그를 출력하도록 개선
 - 크롤러 워커가 `last_crawled_at`을 확인하여 증분 수집 수행
 - RSS 수집기가 날짜 범위 필터링 지원
+- 키워드 삭제 시 상태를 `archived`로 전환하도록 수정하여 데이터베이스 `keywords_status_check` 제약 조건과 일관성 유지
+- 모바일 앱 설정 화면의 헤더 하단 여백을 축소하고 변경 사항 저장 버튼을 추가하여 가독성을 개선
+- 키워드 및 알림 시간 선호도가 즉시 저장되던 플로우를 저장 버튼 클릭 시 일괄 반영되도록 변경하고 사용자별 시간 설정을 유지
 
 ### 문서화
 - README.md - Vercel 배포 체크리스트 및 임포트 검증 절차 추가
 - `docs/workflow.md` - 워크플로우 다이어그램 및 설명 추가
 - `docs/fetch_feedback_logic.md` - 수집 및 피드백 로직 상세 문서 추가
 - `README.md` - 새 기능 및 API 사용법 추가
+- `README.md` - 설정 화면 저장 절차 안내 업데이트
+- `docs/settings_persistence.md` - 설정 저장 및 동기화 흐름 정리
+- `docs/cse_query_limit.md` - Google CSE 쿼리 분배 및 모니터링 정책 문서화
 
 ## [1.0.0] - 초기 릴리스
 

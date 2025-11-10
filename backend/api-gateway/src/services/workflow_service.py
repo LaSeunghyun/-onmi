@@ -6,17 +6,16 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
-from ..repositories import (
-    KeywordRepository,
-    ArticleRepository,
-    KeywordArticleMapper,
-    FetchHistoryRepository,
-    SummarySessionRepository,
-    FeedbackRepository,
-    PreferenceRepository
-)
-from ..models.fetch_history import FetchHistory, DateRange
-from .crawl_service import ExternalNewsCollector
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from repositories.keyword_repository import KeywordRepository
+from repositories.article_repository import ArticleRepository
+from repositories.keyword_article_mapper import KeywordArticleMapper
+from repositories.fetch_history_repository import FetchHistoryRepository
+from repositories.summary_session_repository import SummarySessionRepository
+from repositories.feedback_repository import FeedbackRepository
+from repositories.preference_repository import PreferenceRepository
+from models.fetch_history import FetchHistory, DateRange
+from services.crawl_service import ExternalNewsCollector
 
 
 class WorkflowService:
@@ -120,7 +119,9 @@ class WorkflowService:
             
             # 뉴스 수집
             crawl_result = await self.collector.fetch(
-                keyword_text,
+                keyword_text=keyword_text,
+                user_id=user_id,
+                keyword_id=keyword_id,
                 date_range=(target_range.start, target_range.end)
             )
             
@@ -200,7 +201,7 @@ class WorkflowService:
         )
         
         return {
-            'session_id': str(summary_session.id),
+            'session_id': str(summary_session['id']),
             'summary_text': summary_text,
             'articles_count': len(articles),
             'config': summarization_config

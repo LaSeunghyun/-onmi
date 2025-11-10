@@ -4,6 +4,12 @@ import os
 import traceback
 from pathlib import Path
 
+# Windows 콘솔 인코딩 설정
+if sys.platform == 'win32':
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+
 # Vercel 로깅을 위한 헬퍼 함수
 def log(message, level="INFO"):
     """Vercel에서 보이는 로깅 함수"""
