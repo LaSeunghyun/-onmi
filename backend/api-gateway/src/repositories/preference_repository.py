@@ -64,9 +64,11 @@ class PreferenceRepository:
         async with get_db_connection() as conn:
             rows = await conn.fetch(
                 """
-                SELECT user_id FROM user_preferences
-                WHERE preferences->>'notification_time_hour' = $1
+                SELECT user_id
+                FROM user_preferences
+                WHERE preferences ? 'notification_time_hour'
+                  AND (preferences->>'notification_time_hour')::int = $1
                 """,
-                str(hour)
+                hour
             )
             return [row['user_id'] for row in rows]
