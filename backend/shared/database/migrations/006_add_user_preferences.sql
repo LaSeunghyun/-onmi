@@ -26,3 +26,8 @@ CREATE INDEX IF NOT EXISTS idx_user_preferences_preferences_gin ON user_preferen
 CREATE INDEX IF NOT EXISTS idx_user_preferences_notification_time 
     ON user_preferences ((preferences->>'notification_time_hour'));
 
+
+
+
+
+

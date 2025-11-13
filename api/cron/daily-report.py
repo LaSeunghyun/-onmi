@@ -14,12 +14,16 @@ import requests
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "backend" / "shared"))
+sys.path.insert(0, str(project_root / "backend" / "ingestor" / "src"))
+sys.path.insert(0, str(project_root / "backend" / "nlp-service" / "src"))
 sys.path.insert(0, str(project_root / "backend" / "api-gateway" / "src"))
+sys.path.insert(0, str(project_root / "api"))
 
 import asyncpg
 from config.settings import settings
 from repositories.preference_repository import PreferenceRepository
 from services.summary_service import SummaryService
+from cron.crawl import CrawlerWorker
 
 
 class DailyReportWorker:
@@ -29,6 +33,51 @@ class DailyReportWorker:
         self.summary_service = SummaryService()
         self._notification_url = settings.notification_webhook_url
         self._notification_secret = settings.notification_webhook_secret
+        self._crawler_worker = CrawlerWorker()
+
+    async def _crawl_user_keywords(self, user_id: UUID, db_conn) -> int:
+        """사용자별 활성 키워드를 크롤링하고 저장된 기사 수를 반환"""
+        keywords = await db_conn.fetch(
+            """
+            SELECT id, text
+            FROM keywords
+            WHERE user_id = $1
+              AND status = 'active'
+            ORDER BY created_at DESC
+            """,
+            user_id,
+        )
+
+        if not keywords:
+            print(f"사용자 ID {user_id}의 활성 키워드가 없어 크롤링을 건너뜁니다.")
+            return 0
+
+        total_saved_articles = 0
+
+        print(
+            f"사용자 ID {user_id} 크롤링 시작: {len(keywords)}개 키워드 대상"
+        )
+        for keyword in keywords:
+            keyword_id = keyword["id"]
+            keyword_text = keyword["text"]
+            try:
+                saved_count = await self._crawler_worker.crawl_keyword(
+                    keyword_id,
+                    user_id,
+                    keyword_text,
+                    db_conn,
+                )
+                total_saved_articles += saved_count
+            except Exception as exc:
+                print(
+                    f"키워드 크롤링 오류 (사용자 ID {user_id}, 키워드 {keyword_text}): {exc}"
+                )
+                continue
+
+        print(
+            f"사용자 ID {user_id} 크롤링 완료: 총 {total_saved_articles}개 기사 저장"
+        )
+        return total_saved_articles
 
     async def _fetch_user_profile(self, user_id: UUID, db_conn) -> Optional[Dict[str, Any]]:
         """사용자 프로필 정보 조회"""
@@ -104,6 +153,12 @@ class DailyReportWorker:
         """사용자별 일일 리포트 생성"""
         try:
             print(f"일일 리포트 생성 시작: 사용자 ID {user_id}")
+
+            # 사용자 키워드 크롤링 선행
+            crawled_articles = await self._crawl_user_keywords(user_id, db_conn)
+            print(
+                f"크롤링 결과 (사용자 ID {user_id}): {crawled_articles}개 기사 저장"
+            )
             
             # 일일 요약 생성
             result = await self.summary_service.generate_daily_summary(user_id)

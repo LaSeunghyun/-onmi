@@ -174,6 +174,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           duration: Duration(seconds: 2),
         ),
       );
+
+      // 저장 성공 시 true를 반환하여 홈 화면에서 새로고침하도록 함
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       setState(() {
         _isSaving = false;
@@ -216,68 +221,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           children: [
             // 커스텀 헤더 - 전체 너비
-            Container(
-              height: 57,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color.fromRGBO(0, 0, 0, 0.25),
-                    blurRadius: 4,
-                    offset: Offset(0, 4),
+            Builder(
+              builder: (context) {
+                final padding = Responsive.getPadding(context);
+                final headerHeight = padding * 3.5; // 모바일: 16*3.5=56, 태블릿: 24*3.5=84, 데스크톱: 32*3.5=112
+                final titleFontSize = Responsive.getTextSize(context, 16);
+                final iconSize = Responsive.getTextSize(context, 24);
+                final buttonSize = padding * 2;
+                
+                return Container(
+                  height: headerHeight.clamp(56.0, 112.0),
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color.fromRGBO(0, 0, 0, 0.25),
+                        blurRadius: 4,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(8),
+                      bottomRight: Radius.circular(8),
+                    ),
                   ),
-                ],
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(8),
-                  bottomRight: Radius.circular(8),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  // 뒤로가기 버튼
-                  Positioned(
-                    left: 8,
-                    top: 13,
-                    child: SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          borderRadius: BorderRadius.circular(8),
-                          child: const Center(
-                            child: Icon(
-                              Icons.arrow_back,
-                              size: 24,
-                              color: Color(0xFF030213),
+                  child: Stack(
+                    children: [
+                      // 뒤로가기 버튼
+                      Positioned(
+                        left: padding * 0.5,
+                        top: headerHeight * 0.23,
+                        child: SizedBox(
+                          width: buttonSize,
+                          height: buttonSize,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => Navigator.pop(context, false),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Center(
+                                child: Icon(
+                                  Icons.arrow_back,
+                                  size: iconSize,
+                                  color: const Color(0xFF030213),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  // 설정 타이틀 - 중앙 정렬
-                  const Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 16.5,
-                    child: Center(
-                      child: Text(
-                        '설정',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.normal,
-                          color: Color(0xFF030213),
-                          fontFamily: 'Noto Sans KR',
-                          height: 1.5, // leading 24px / fontSize 16px
+                      // 설정 타이틀 - 중앙 정렬
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: headerHeight * 0.29,
+                        child: Center(
+                          child: Text(
+                            '설정',
+                            style: TextStyle(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.normal,
+                              color: const Color(0xFF030213),
+                              fontFamily: 'Noto Sans KR',
+                              height: 1.5, // leading 24px / fontSize 16px
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
             // 본문 - 중앙 정렬
             Expanded(
@@ -489,9 +504,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               backgroundColor:
                                   WidgetStateProperty.resolveWith((states) {
                                 if (states.contains(WidgetState.disabled)) {
-                                  return const Color(0xFFE5E7EB);
+                                  return const Color(0xFFCCCCCC);
                                 }
-                                return const Color(0xFF2563EB);
+                                return const Color(0xFF81D4FA);
                               }),
                               foregroundColor:
                                   WidgetStateProperty.resolveWith((states) {
@@ -532,7 +547,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ref.read(authProvider.notifier).signOut();
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFB2C36),
+                              backgroundColor: const Color(0xFFE57373),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 8),

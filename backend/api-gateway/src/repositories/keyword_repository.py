@@ -1,5 +1,5 @@
 """키워드 리포지토리"""
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from uuid import UUID
 from datetime import datetime
 import sys
@@ -22,6 +22,21 @@ class KeywordRepository:
                 keyword_id, user_id
             )
             return dict(row) if row else None
+
+    @staticmethod
+    async def list_active_by_user(user_id: UUID) -> List[Dict]:
+        """사용자의 활성 키워드 목록 조회"""
+        async with get_db_connection() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, text, status, last_crawled_at, created_at
+                FROM keywords
+                WHERE user_id = $1 AND status = 'active'
+                ORDER BY created_at DESC
+                """,
+                user_id,
+            )
+            return [dict(row) for row in rows]
     
     @staticmethod
     async def update_last_crawled_at(keyword_id: UUID, crawled_at: datetime) -> None:
@@ -31,4 +46,3 @@ class KeywordRepository:
                 "UPDATE keywords SET last_crawled_at = $1 WHERE id = $2",
                 crawled_at, keyword_id
             )
-

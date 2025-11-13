@@ -4,6 +4,7 @@ class Summary {
   final String summaryType; // 'daily' or 'keyword'
   final int articlesCount;
   final DateTime? createdAt;
+  final List<DateTime> availableDates;
 
   Summary({
     required this.sessionId,
@@ -11,6 +12,7 @@ class Summary {
     required this.summaryType,
     required this.articlesCount,
     this.createdAt,
+    this.availableDates = const [],
   });
 
   static DateTime? _parseDateTime(dynamic value) {
@@ -34,6 +36,11 @@ class Summary {
       summaryType: json['summary_type'] as String? ?? 'daily',
       articlesCount: json['articles_count'] as int? ?? 0,
       createdAt: _parseDateTime(json['created_at']),
+      availableDates: (json['available_dates'] as List?)
+              ?.map((value) => _parseDateTime(value))
+              .whereType<DateTime>()
+              .toList() ??
+          const [],
     );
   }
 
@@ -44,6 +51,7 @@ class Summary {
       'summary_type': summaryType,
       'articles_count': articlesCount,
       'created_at': createdAt?.toIso8601String(),
+      'available_dates': availableDates.map((d) => d.toIso8601String()).toList(),
     };
   }
 }

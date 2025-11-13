@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/token_usage.dart';
+import '../utils/responsive.dart';
 
 class TokenLimitBanner extends StatelessWidget {
   final TokenUsage tokenUsage;
@@ -17,9 +18,14 @@ class TokenLimitBanner extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final padding = Responsive.getPadding(context);
+    final baseFontSize = Responsive.getTextSize(context, 16);
+    final smallFontSize = Responsive.getTextSize(context, 14);
+    final extraSmallFontSize = Responsive.getTextSize(context, 12);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
       color: Colors.red.shade50,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -27,12 +33,12 @@ class TokenLimitBanner extends StatelessWidget {
           Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
-              const SizedBox(width: 8),
+              SizedBox(width: padding * 0.5),
               Expanded(
                 child: Text(
                   '시스템 일일 토큰 제한 초과',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: baseFontSize,
                     fontWeight: FontWeight.bold,
                     color: Colors.red.shade900,
                   ),
@@ -46,27 +52,27 @@ class TokenLimitBanner extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: padding * 0.5),
           Text(
             tokenUsage.message,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: smallFontSize,
               color: Colors.red.shade800,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: padding * 0.25),
           Text(
             '사용량: ${_formatNumber(tokenUsage.todayUsage)} / ${_formatNumber(tokenUsage.dailyLimit)} 토큰',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: extraSmallFontSize,
               color: Colors.red.shade700,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: padding * 0.25),
           Text(
             '복구 예정: ${_formatResetTime(tokenUsage.resetAt)}',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: extraSmallFontSize,
               color: Colors.red.shade700,
             ),
           ),
@@ -102,5 +108,7 @@ class TokenLimitBanner extends StatelessWidget {
     }
   }
 }
+
+
 
 

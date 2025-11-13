@@ -142,6 +142,18 @@ class Settings(BaseSettings):
         description="Vercel Cron Job 인증을 위한 시크릿 키"
     )
     
+    # Notification Webhook (선택 사항)
+    notification_webhook_url: Optional[str] = Field(
+        default=None,
+        alias="NOTIFICATION_WEBHOOK_URL",
+        description="일일 요약 알림을 전송할 웹훅 URL (예: Slack, Teams, 커스텀 엔드포인트)"
+    )
+    notification_webhook_secret: Optional[str] = Field(
+        default=None,
+        alias="NOTIFICATION_WEBHOOK_SECRET",
+        description="알림 웹훅 호출 시 Authorization 헤더에 사용할 시크릿 토큰"
+    )
+    
     @field_validator("database_url", mode="after")
     @classmethod
     def resolve_database_url(cls, v: Optional[str], info: FieldValidationInfo) -> str:

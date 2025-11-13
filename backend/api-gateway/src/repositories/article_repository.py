@@ -13,9 +13,13 @@ class ArticleRepository:
     """기사 데이터 접근 리포지토리"""
     
     @staticmethod
-    async def fetch_recent_by_user(user_id: UUID, limit: int = 100) -> List[Dict]:
+    async def fetch_recent_by_user(user_id: UUID, limit: int = 100, include_archived: bool = False) -> List[Dict]:
         """사용자의 모든 키워드에 대한 최근 기사 조회"""
         async with get_db_connection() as conn:
+            status_filter = "k.status = 'active'"
+            if include_archived:
+                status_filter = "k.status IN ('active', 'archived')"
+
             rows = await conn.fetch(
                 """
                 SELECT DISTINCT
@@ -27,18 +31,24 @@ class ArticleRepository:
                 INNER JOIN keyword_articles ka ON a.id = ka.article_id
                 INNER JOIN keywords k ON ka.keyword_id = k.id
                 LEFT JOIN sentiments s ON a.id = s.article_id
-                WHERE k.user_id = $1 AND k.status = 'active'
+                WHERE k.user_id = $1 AND {status_filter}
                 ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
                 LIMIT $2
-                """,
+                """.format(status_filter=status_filter),
                 user_id, limit
             )
             return [dict(row) for row in rows]
     
     @staticmethod
-    async def fetch_recent_by_keyword(keyword_id: UUID, limit: int = 50) -> List[Dict]:
+    async def fetch_recent_by_keyword(keyword_id: UUID, limit: int = 50, include_archived: bool = False) -> List[Dict]:
         """키워드별 최근 기사 조회"""
         async with get_db_connection() as conn:
+            status_filter = ""
+            if include_archived:
+                status_filter = "AND k.status IN ('active', 'archived')"
+            else:
+                status_filter = "AND k.status = 'active'"
+
             rows = await conn.fetch(
                 """
                 SELECT DISTINCT
@@ -48,15 +58,60 @@ class ArticleRepository:
                     s.rationale as sentiment_rationale
                 FROM articles a
                 INNER JOIN keyword_articles ka ON a.id = ka.article_id
+                INNER JOIN keywords k ON ka.keyword_id = k.id
                 LEFT JOIN sentiments s ON a.id = s.article_id
                 WHERE ka.keyword_id = $1
+                  {status_filter}
                 ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
                 LIMIT $2
-                """,
+                """.format(status_filter=status_filter),
                 keyword_id, limit
             )
             return [dict(row) for row in rows]
     
+    @staticmethod
+    async def count_recent_by_user(user_id: UUID, include_archived: bool = False) -> int:
+        """사용자의 최근 기사 수를 조회"""
+        async with get_db_connection() as conn:
+            status_filter = "k.status = 'active'"
+            if include_archived:
+                status_filter = "k.status IN ('active', 'archived')"
+
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT a.id)
+                FROM articles a
+                INNER JOIN keyword_articles ka ON a.id = ka.article_id
+                INNER JOIN keywords k ON ka.keyword_id = k.id
+                WHERE k.user_id = $1 AND {status_filter}
+                """.format(status_filter=status_filter),
+                user_id,
+            )
+            return count or 0
+
+    @staticmethod
+    async def count_recent_by_keyword(keyword_id: UUID, include_archived: bool = False) -> int:
+        """키워드별 최근 기사 수를 조회"""
+        async with get_db_connection() as conn:
+            status_filter = ""
+            if include_archived:
+                status_filter = "AND k.status IN ('active', 'archived')"
+            else:
+                status_filter = "AND k.status = 'active'"
+
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT a.id)
+                FROM articles a
+                INNER JOIN keyword_articles ka ON a.id = ka.article_id
+                INNER JOIN keywords k ON ka.keyword_id = k.id
+                WHERE ka.keyword_id = $1
+                  {status_filter}
+                """.format(status_filter=status_filter),
+                keyword_id,
+            )
+            return count or 0
+
     @staticmethod
     async def upsert_batch(articles: List[Dict]) -> List[UUID]:
         """기사 일괄 저장 또는 업데이트"""

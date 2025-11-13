@@ -67,3 +67,8 @@ CREATE INDEX IF NOT EXISTS idx_summary_feedback_user_session ON summary_feedback
 CREATE INDEX IF NOT EXISTS idx_summary_feedback_rating ON summary_feedback(rating);
 CREATE INDEX IF NOT EXISTS idx_summary_feedback_created_at ON summary_feedback(created_at DESC);
 
+
+
+
+
+

@@ -16,10 +16,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/crawl",
-      "schedule": "0 0 * * *"
-    },
-    {
+      "_comment_kst": "매 시간 정각 실행 (UTC 기준). 한국 시간(KST) 기준으로는 매 시간 정각에 해당 (UTC+9).",
       "path": "/api/cron/daily-report",
       "schedule": "0 * * * *"
     }

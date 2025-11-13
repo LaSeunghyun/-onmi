@@ -31,12 +31,19 @@ onmi/
 - 키워드별 요약: 특정 키워드에 대한 요약
 - 피드백 시스템: 좋아요/싫어요 (1-5점) 피드백 제출
 - 피드백 기반 자동 개선: 사용자 피드백을 반영하여 요약 품질 지속 개선
+- 데이터가 아직 생성되지 않은 경우 홈 화면에서 "조회전" 안내 카드와 재시도 버튼을 통해 즉시 요약 생성을 시도할 수 있음
 
 ### Google CSE 쿼리 제한 관리
 - 일일 100건 무료 쿼리를 활성 사용자 수로 균등 분배
 - 사용자별 보유 키워드 개수에 따라 키워드별 최대 사용량 계산
 - `/stats/cse-query-usage` API로 잔여 쿼리 수 조회
 - 모바일 홈 화면에서 "조회 가능 쿼리수" 실시간 표시
+
+### 성능 모니터링 및 로딩 경험
+- `PerformanceMonitor`를 통해 플러터 네트워크·위젯 빌드 구간을 계측하고 DevTools Timeline에 기록합니다.
+- 요약과 피드 데이터는 Hive 캐시에 저장되어 다음 방문 시 즉시 표시됩니다.
+- 요약 카드와 상세 화면은 900ms 이상 응답이 지연될 경우 자동으로 스켈레톤 UI로 전환됩니다.
+- FastAPI 게이트웨이는 `track_async_performance`로 핵심 DB/서비스 호출 시간을 로깅하고, 요약 관련 쿼리를 `asyncio.gather`로 병렬 처리합니다.
 
 ## 기술 스택
 
@@ -198,6 +205,7 @@ docker exec -i onmi-postgres psql -U onmi -d onmi_db < backend/shared/database/m
 ## 문서
 
 - [워크플로우 문서](docs/workflow.md) - 시스템 워크플로우 상세 설명
+- [성능 최적화 개요](docs/performance_optimization.md) - 계측, 캐시, 비동기 처리 전략 요약
 - [수집 및 피드백 로직](docs/fetch_feedback_logic.md) - 기간 계산 및 피드백 기반 개선 메커니즘
 - [설정 저장 플로우](docs/settings_persistence.md) - 키워드·알림 설정 저장 및 동기화 절차
 - [Google CSE 쿼리 제한 정책](docs/cse_query_limit.md) - 일일 쿼리 배분 및 모니터링 로직

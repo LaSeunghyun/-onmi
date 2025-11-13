@@ -147,164 +147,155 @@ class _ArticleDetailScreenState extends ConsumerState<ArticleDetailScreen> {
                 ],
               ),
             ),
-            // 본문 - 중앙 정렬
+            // 본문 - 상단 정렬
             Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: Responsive.getMaxContentWidth(context),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: Responsive.getAllPadding(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 제목
-                        Text(
-                          widget.article.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFF030213),
-                            fontFamily: 'Noto Sans KR',
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // 출처, 시간, 감성
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  widget.article.source,
-                                  style: const TextStyle(
-                                    color: Color(0xFF6A7282),
-                                    fontSize: 14,
-                                    fontFamily: 'Noto Sans KR',
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  '•',
-                                  style: TextStyle(
-                                    color: Color(0xFF6A7282),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _formatTime(widget.article.publishedAt),
-                                  style: const TextStyle(
-                                    color: Color(0xFF6A7282),
-                                    fontSize: 14,
-                                    fontFamily: 'Noto Sans KR',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                _getSentimentIcon(widget.article.sentimentLabel),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _getSentimentText(widget.article.sentimentLabel),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF030213),
-                                    fontFamily: 'Noto Sans KR',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // 본문 내용
-                        if (widget.article.snippet.isNotEmpty) ...[
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: Responsive.getMaxContentWidth(context),
+                    ),
+                    child: Padding(
+                      padding: Responsive.getAllPadding(context),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 제목
                           Text(
-                            widget.article.snippet,
+                            widget.article.title,
                             style: const TextStyle(
-                              fontSize: 16,
-                              height: 1.625,
-                              color: Color(0xFF364153),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF030213),
                               fontFamily: 'Noto Sans KR',
+                              height: 1.45,
                             ),
                           ),
                           const SizedBox(height: 12),
-                        ],
-                        // 구분선
-                        Container(
-                          height: 1,
-                          color: Colors.black.withOpacity(0.1),
-                        ),
-                        const SizedBox(height: 17),
-                        // 원문 보기 버튼
-                        SizedBox(
-                          width: double.infinity,
-                          height: 36,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _openOriginalUrl,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(
-                                    color: Colors.black.withOpacity(0.1),
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                          // 출처, 시간, 감성
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
                                   children: [
-                                    const Icon(
-                                      Icons.open_in_new,
-                                      size: 16,
-                                      color: Color(0xFF030213),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      '원문 보기',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF030213),
+                                    Text(
+                                      widget.article.source,
+                                      style: const TextStyle(
+                                        color: Color(0xFF6A7282),
+                                        fontSize: 15,
                                         fontFamily: 'Noto Sans KR',
-                                        height: 1.43, // leading 20px / fontSize 14px
+                                      ),
+                                    ),
+                                    Text(
+                                      '• ${_formatTime(widget.article.publishedAt)}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF6A7282),
+                                        fontSize: 15,
+                                        fontFamily: 'Noto Sans KR',
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _getSentimentIcon(widget.article.sentimentLabel),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _getSentimentText(widget.article.sentimentLabel),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF030213),
+                                      fontFamily: 'Noto Sans KR',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          // 본문 내용
+                          if (widget.article.snippet.isNotEmpty) ...[
+                            SelectionArea(
+                              child: Text(
+                                widget.article.snippet,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  height: 1.7,
+                                  color: Color(0xFF2D3748),
+                                  fontFamily: 'Noto Sans KR',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+                          // 구분선
+                          Container(
+                            height: 1,
+                            color: Colors.black.withOpacity(0.08),
+                          ),
+                          const SizedBox(height: 20),
+                          // 원문 보기 버튼
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: ElevatedButton.icon(
+                              onPressed: _openOriginalUrl,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF030213),
+                                side: BorderSide(
+                                  color: Colors.black.withOpacity(0.12),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                elevation: 0,
+                              ),
+                              icon: const Icon(
+                                Icons.open_in_new,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                '원문 보기',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Noto Sans KR',
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        // 안내 메시지
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Align(
-                            alignment: Alignment.topLeft,
-                            child: Text(
-                              '💡 실제 서비스에서는 뉴스 API를 통해 실제 기사 내용을 가져옵니다.',
+                          const SizedBox(height: 16),
+                          // 안내 메시지
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              '💡 실제 서비스에서는 뉴스 API를 통해 완전한 기사 내용을 불러와 요약을 제공합니다.',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Color(0xFF4A5565),
                                 fontFamily: 'Noto Sans KR',
-                                height: 1.43, // leading 20px / fontSize 14px
+                                height: 1.5,
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

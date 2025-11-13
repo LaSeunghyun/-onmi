@@ -226,3 +226,8 @@ Write-Host "  3. 네트워크 연결 상태 확인" -ForegroundColor Gray
 Write-Host "  4. Supabase 대시보드에서 데이터베이스 상태 확인" -ForegroundColor Gray
 Write-Host ""
 
+
+
+
+
+

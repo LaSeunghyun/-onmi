@@ -1,5 +1,6 @@
 """요약 세션 리포지토리"""
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+from datetime import date
 from uuid import UUID
 import json
 import sys
@@ -85,4 +86,78 @@ class SummarySessionRepository:
                 keyword_id, user_id
             )
             return dict(session) if session else None
+
+    @staticmethod
+    async def get_daily_by_date(user_id: UUID, target_date: date) -> Optional[Dict]:
+        """특정 날짜의 일일 요약 조회"""
+        async with get_db_connection() as conn:
+            session = await conn.fetchrow(
+                """
+                SELECT id, keyword_id, user_id, summary_text, summary_type,
+                       summarization_config, created_at
+                FROM summary_sessions
+                WHERE user_id = $1
+                  AND keyword_id IS NULL
+                  AND summary_type = 'daily'
+                  AND DATE(created_at) = $2
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                user_id, target_date
+            )
+            return dict(session) if session else None
+
+    @staticmethod
+    async def get_keyword_by_date(keyword_id: UUID, user_id: UUID, target_date: date) -> Optional[Dict]:
+        """특정 날짜의 키워드별 요약 조회"""
+        async with get_db_connection() as conn:
+            session = await conn.fetchrow(
+                """
+                SELECT id, keyword_id, user_id, summary_text, summary_type,
+                       summarization_config, created_at
+                FROM summary_sessions
+                WHERE keyword_id = $1
+                  AND user_id = $2
+                  AND summary_type = 'keyword'
+                  AND DATE(created_at) = $3
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                keyword_id, user_id, target_date
+            )
+            return dict(session) if session else None
+
+    @staticmethod
+    async def list_daily_dates(user_id: UUID) -> List[date]:
+        """일일 요약이 존재하는 날짜 목록 조회"""
+        async with get_db_connection() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT DATE(created_at) AS summary_date
+                FROM summary_sessions
+                WHERE user_id = $1
+                  AND keyword_id IS NULL
+                  AND summary_type = 'daily'
+                ORDER BY summary_date DESC
+                """,
+                user_id
+            )
+            return [row["summary_date"] for row in rows]
+
+    @staticmethod
+    async def list_keyword_dates(keyword_id: UUID, user_id: UUID) -> List[date]:
+        """키워드별 요약이 존재하는 날짜 목록 조회"""
+        async with get_db_connection() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT DATE(created_at) AS summary_date
+                FROM summary_sessions
+                WHERE keyword_id = $1
+                  AND user_id = $2
+                  AND summary_type = 'keyword'
+                ORDER BY summary_date DESC
+                """,
+                keyword_id, user_id
+            )
+            return [row["summary_date"] for row in rows]
 

@@ -23,3 +23,8 @@ END
 WHERE auth_type = 'local' AND oauth_provider IS NOT NULL;
 
 
+
+
+
+
+

@@ -4,7 +4,8 @@ class KeywordFilter extends StatelessWidget {
   final List<String> keywords;
   final String? selectedKeyword;
   final Function(String?) onSelectKeyword;
-  final Map<String, int> issueCounts;
+  final Map<String, int?> issueCounts;
+  final int? totalCount;
 
   const KeywordFilter({
     super.key,
@@ -12,10 +13,20 @@ class KeywordFilter extends StatelessWidget {
     required this.selectedKeyword,
     required this.onSelectKeyword,
     required this.issueCounts,
+    this.totalCount,
   });
 
-  int get totalIssues {
-    return issueCounts.values.fold(0, (sum, count) => sum + count);
+  int? get totalIssues {
+    if (totalCount != null) {
+      return totalCount;
+    }
+    if (issueCounts.values.any((count) => count == null)) {
+      return null;
+    }
+    return issueCounts.values.fold<int>(
+      0,
+      (sum, count) => sum + (count ?? 0),
+    );
   }
 
   @override
@@ -35,7 +46,7 @@ class KeywordFilter extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 8),
                 child: _FilterChip(
                   label: keyword,
-                  count: issueCounts[keyword] ?? 0,
+                  count: issueCounts[keyword],
                   isSelected: selectedKeyword == keyword,
                   onTap: () => onSelectKeyword(keyword),
                 ),
@@ -48,7 +59,7 @@ class KeywordFilter extends StatelessWidget {
 
 class _FilterChip extends StatelessWidget {
   final String label;
-  final int count;
+  final int? count;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -70,7 +81,9 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFF6B35) : Colors.white,
           border: Border.all(
-            color: isSelected ? const Color(0xFFFF6B35) : Colors.black.withOpacity(0.1),
+            color: isSelected
+                ? const Color(0xFFFF6B35)
+                : Colors.black.withOpacity(0.1),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -94,9 +107,11 @@ class _FilterChip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                count.toString(),
+                count?.toString() ?? '--',
                 style: TextStyle(
-                  color: isSelected ? const Color(0xFF364153) : const Color(0xFF4A5565),
+                  color: isSelected
+                      ? const Color(0xFF364153)
+                      : const Color(0xFF4A5565),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFamily: 'Noto Sans KR',
@@ -109,6 +124,3 @@ class _FilterChip extends StatelessWidget {
     );
   }
 }
-
-
-

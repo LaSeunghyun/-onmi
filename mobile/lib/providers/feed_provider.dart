@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/article.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
+import '../utils/performance_monitor.dart';
 
 class FeedState {
   final List<Article> articles;
@@ -64,38 +65,63 @@ class FeedNotifier extends StateNotifier<FeedState> {
     String? filterSentiment,
     String sort = 'recent',
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final response = await _apiService.getFeed(
-        keywordId: keywordId,
-        filterSentiment: filterSentiment,
-        sort: sort,
-      );
-      
-      // 캐시에 저장
-      await _cacheService.cacheArticles(response.items);
-      
-      state = state.copyWith(
-        articles: response.items,
-        total: response.total,
-        isLoading: false,
-      );
-    } catch (e) {
-      // 오프라인 모드: 캐시에서 로드
-      try {
-        final cachedArticles = await _cacheService.getCachedArticles();
-        state = state.copyWith(
-          articles: cachedArticles,
-          isLoading: false,
-          error: '오프라인 모드: 캐시된 데이터를 표시합니다',
-        );
-      } catch (cacheError) {
-        state = state.copyWith(
-          isLoading: false,
-          error: e.toString(),
-        );
-      }
-    }
+    await PerformanceMonitor.trackAsync(
+      label: 'FeedNotifier.loadFeed',
+      metadata: {
+        if (keywordId != null) 'keywordId': keywordId,
+        if (filterSentiment != null) 'filterSentiment': filterSentiment,
+        'sort': sort,
+      },
+      action: () async {
+        state = state.copyWith(isLoading: true, error: null);
+        try {
+          final response = await PerformanceMonitor.trackAsync(
+            label: 'ApiService.getFeed',
+            metadata: {
+              if (keywordId != null) 'keywordId': keywordId,
+              if (filterSentiment != null) 'filterSentiment': filterSentiment,
+              'sort': sort,
+            },
+            action: () => _apiService.getFeed(
+              keywordId: keywordId,
+              filterSentiment: filterSentiment,
+              sort: sort,
+            ),
+          );
+          
+          // 캐시에 저장
+          await PerformanceMonitor.trackAsync(
+            label: 'CacheService.cacheArticles',
+            metadata: {'count': response.items.length},
+            action: () => _cacheService.cacheArticles(response.items),
+          );
+          
+          state = state.copyWith(
+            articles: response.items,
+            total: response.total,
+            isLoading: false,
+          );
+        } catch (e) {
+          // 오프라인 모드: 캐시에서 로드
+          try {
+            final cachedArticles = await PerformanceMonitor.trackAsync(
+              label: 'CacheService.getCachedArticles',
+              action: _cacheService.getCachedArticles,
+            );
+            state = state.copyWith(
+              articles: cachedArticles,
+              isLoading: false,
+              error: '오프라인 모드: 캐시된 데이터를 표시합니다',
+            );
+          } catch (cacheError) {
+            state = state.copyWith(
+              isLoading: false,
+              error: e.toString(),
+            );
+          }
+        }
+      },
+    );
   }
 
   Future<void> refresh() async {

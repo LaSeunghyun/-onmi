@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/article.dart';
 import '../models/keyword.dart';
+import '../models/summary.dart';
 
 /// Hive 캐시 박스를 관리하는 서비스.
 ///
@@ -18,9 +19,11 @@ class CacheService {
 
   static const String _articlesBoxName = 'articles';
   static const String _keywordsBoxName = 'keywords';
+  static const String _summariesBoxName = 'summaries';
 
   late final Box<Map> _articlesBox;
   late final Box<Map> _keywordsBox;
+  late final Box<Map> _summariesBox;
 
   bool _initialized = false;
   Future<void>? _initialization;
@@ -44,6 +47,7 @@ class CacheService {
 
     _articlesBox = await Hive.openBox<Map>(_articlesBoxName);
     _keywordsBox = await Hive.openBox<Map>(_keywordsBoxName);
+    _summariesBox = await Hive.openBox<Map>(_summariesBoxName);
     _initialized = true;
   }
 
@@ -135,5 +139,30 @@ class CacheService {
   Future<void> clearKeywordsCache() async {
     await _ensureInitialized();
     await _keywordsBox.clear();
+  }
+
+  /// 요약 데이터를 캐시에 저장한다.
+  Future<void> cacheSummary({
+    required String cacheKey,
+    required Summary summary,
+  }) async {
+    await _ensureInitialized();
+    await _summariesBox.put(cacheKey, summary.toJson());
+  }
+
+  /// 캐시된 요약 데이터를 반환한다.
+  Future<Summary?> getCachedSummary(String cacheKey) async {
+    await _ensureInitialized();
+    final data = _summariesBox.get(cacheKey);
+    if (data == null) {
+      return null;
+    }
+    return Summary.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// 요약 캐시를 모두 삭제한다.
+  Future<void> clearSummariesCache() async {
+    await _ensureInitialized();
+    await _summariesBox.clear();
   }
 }

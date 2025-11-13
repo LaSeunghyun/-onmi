@@ -40,17 +40,36 @@ class ApiService {
           options.headers['Authorization'] = 'Bearer $_token';
         }
         final timestamp = DateFormat('HH:mm:ss.SSS').format(DateTime.now());
+        options.extra['requestStart'] = DateTime.now().microsecondsSinceEpoch;
         print('[$timestamp] [API Request] ${options.method} ${options.uri}');
         return handler.next(options);
       },
       onResponse: (response, handler) {
         final timestamp = DateFormat('HH:mm:ss.SSS').format(DateTime.now());
-        print('[$timestamp] [API Response] ${response.statusCode} ${response.requestOptions.uri}');
+        final startMicros =
+            response.requestOptions.extra['requestStart'] as int? ?? 0;
+        final elapsedMs = startMicros == 0
+            ? null
+            : (DateTime.now().microsecondsSinceEpoch - startMicros) / 1000.0;
+        final durationMessage =
+            elapsedMs != null ? ' (${elapsedMs.toStringAsFixed(1)} ms)' : '';
+        print(
+          '[$timestamp] [API Response] ${response.statusCode} ${response.requestOptions.uri}$durationMessage',
+        );
         return handler.next(response);
       },
       onError: (error, handler) {
         final timestamp = DateFormat('HH:mm:ss.SSS').format(DateTime.now());
-        print('[$timestamp] [API Error] ${error.type} ${error.requestOptions.uri}');
+        final startMicros =
+            error.requestOptions.extra['requestStart'] as int? ?? 0;
+        final elapsedMs = startMicros == 0
+            ? null
+            : (DateTime.now().microsecondsSinceEpoch - startMicros) / 1000.0;
+        final durationMessage =
+            elapsedMs != null ? ' (${elapsedMs.toStringAsFixed(1)} ms)' : '';
+        print(
+          '[$timestamp] [API Error] ${error.type} ${error.requestOptions.uri}$durationMessage',
+        );
         print('[$timestamp] [API Error] Request Data: ${error.requestOptions.data}');
         if (error.response != null) {
           print('[$timestamp] [API Error] Status: ${error.response?.statusCode}');
@@ -201,14 +220,28 @@ class ApiService {
   }
 
   /// 일일 요약 조회
-  Future<Summary> getDailySummary() async {
-    final response = await _dio.get('/summaries/daily');
+  Future<Summary> getDailySummary({String? date}) async {
+    final queryParameters = <String, dynamic>{};
+    if (date != null && date.isNotEmpty) {
+      queryParameters['date'] = date;
+    }
+    final response = await _dio.get(
+      '/summaries/daily',
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     return Summary.fromJson(response.data);
   }
 
   /// 키워드별 요약 조회
-  Future<Summary> getKeywordSummary(String keywordId) async {
-    final response = await _dio.get('/summaries/keywords/$keywordId');
+  Future<Summary> getKeywordSummary(String keywordId, {String? date}) async {
+    final queryParameters = <String, dynamic>{};
+    if (date != null && date.isNotEmpty) {
+      queryParameters['date'] = date;
+    }
+    final response = await _dio.get(
+      '/summaries/keywords/$keywordId',
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     return Summary.fromJson(response.data);
   }
 

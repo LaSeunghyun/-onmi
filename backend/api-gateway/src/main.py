@@ -212,16 +212,27 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         
-        # 요청 정보 로깅
-        logger.info("=" * 80)
-        logger.info(f"📥 요청 수신: {request.method} {request.url}")
-        logger.info(f"   클라이언트: {request.client.host if request.client else 'N/A'}")
+        # 요청 정보 로깅 (간소화)
+        method = request.method
+        url = str(request.url)
+        client_host = request.client.host if request.client else 'N/A'
         
-        # 헤더 로깅 (민감한 정보 제외)
+        # URL에서 쿼리 파라미터 제거 (가독성 향상)
+        url_path = url.split('?')[0] if '?' in url else url
+        
+        logger.info("=" * 80)
+        logger.info(f"[REQUEST] {method} {url_path}")
+        logger.info(f"  Client: {client_host}")
+        
+        # 헤더 로깅 (민감한 정보 제외, 간소화)
         headers_dict = dict(request.headers)
         if 'authorization' in headers_dict:
             headers_dict['authorization'] = 'Bearer ***'
-        logger.info(f"   헤더: {headers_dict}")
+        # 주요 헤더만 로깅
+        important_headers = {k: v for k, v in headers_dict.items() 
+                           if k.lower() in ['user-agent', 'content-type', 'accept', 'host']}
+        if important_headers:
+            logger.info(f"  Headers: {important_headers}")
         
         # 요청 본문 읽기 (한 번만)
         body_bytes = b""
@@ -230,9 +241,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             body_bytes = await request.body()
             if body_bytes:
                 body_str = body_bytes.decode('utf-8')
-                logger.info(f"   본문: {body_str[:500]}")  # 최대 500자만
+                if len(body_str) > 0:
+                    logger.info(f"  Body: {body_str[:200]}")  # 최대 200자만
         except Exception as e:
-            logger.warning(f"   본문 읽기 실패: {e}")
+            logger.warning(f"  Body read failed: {e}")
         
         # 요청 본문을 다시 설정 (다음 핸들러가 읽을 수 있도록)
         async def receive():
@@ -243,16 +255,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             process_time = time.time() - start_time
-            logger.info(f"📤 응답 전송: {request.method} {request.url}")
-            logger.info(f"   상태 코드: {response.status_code}")
-            logger.info(f"   처리 시간: {process_time:.3f}초")
+            logger.info(f"[RESPONSE] {method} {url_path}")
+            logger.info(f"  Status: {response.status_code}")
+            logger.info(f"  Time: {process_time:.3f}s")
             logger.info("=" * 80)
             return response
         except Exception as e:
             process_time = time.time() - start_time
-            logger.error(f"❌ 요청 처리 실패: {request.method} {request.url}")
-            logger.error(f"   오류: {str(e)}")
-            logger.error(f"   처리 시간: {process_time:.3f}초")
+            logger.error(f"[ERROR] {method} {url_path}")
+            logger.error(f"  Error: {str(e)}")
+            logger.error(f"  Time: {process_time:.3f}s")
             logger.info("=" * 80)
             raise
 
