@@ -30,8 +30,8 @@ class ApiService {
         defaultValue: 'http://10.0.2.2:8000', // Android 에뮬레이터용
       ),
       headers: {'Content-Type': 'application/json'},
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
     ),
   ) {
     _dio.interceptors.add(InterceptorsWrapper(

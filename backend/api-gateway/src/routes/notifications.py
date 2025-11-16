@@ -11,6 +11,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 from src.routes.auth import get_current_user
 from database.connection import get_db_connection
 
+# timezone_utils는 shared/utils에 있으므로 직접 import
+shared_utils_path = os.path.join(os.path.dirname(__file__), '../../../shared/utils')
+if shared_utils_path not in sys.path:
+    sys.path.insert(0, shared_utils_path)
+from timezone_utils import now_kst
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -42,8 +48,8 @@ async def detect_negative_surge(
                     detail="키워드를 찾을 수 없습니다"
                 )
             
-            # 최근 6시간 부정 기사 수
-            six_hours_ago = datetime.now() - timedelta(hours=6)
+            # 최근 6시간 부정 기사 수 (한국 시간 기준)
+            six_hours_ago = now_kst() - timedelta(hours=6)
             recent_negative = await conn.fetchval(
                 """
                 SELECT COUNT(*)
@@ -69,8 +75,8 @@ async def detect_negative_surge(
                 keyword_id, six_hours_ago
             )
             
-            # 최근 7일 평균 부정 비율
-            seven_days_ago = datetime.now() - timedelta(days=7)
+            # 최근 7일 평균 부정 비율 (한국 시간 기준)
+            seven_days_ago = now_kst() - timedelta(days=7)
             avg_negative = await conn.fetchval(
                 """
                 SELECT COUNT(*)

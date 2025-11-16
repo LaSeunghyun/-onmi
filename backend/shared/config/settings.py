@@ -84,8 +84,8 @@ class Settings(BaseSettings):
         description="토큰 사용량 경고 임계값 (0.0 ~ 1.0)"
     )
     daily_cse_query_limit: int = Field(
-        default=100,
-        description="Google CSE 일일 총 쿼리 제한 (무료 플랜 기준 100)"
+        default=10000,
+        description="Google CSE 일일 총 쿼리 제한 (무료 플랜 기준 10000)"
     )
     cse_query_reset_hour_utc: int = Field(
         default=16,

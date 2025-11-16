@@ -17,6 +17,12 @@ from repositories.preference_repository import PreferenceRepository
 from models.fetch_history import FetchHistory, DateRange
 from services.crawl_service import ExternalNewsCollector
 
+# timezone_utils는 shared/utils에 있으므로 직접 import
+shared_utils_path = os.path.join(os.path.dirname(__file__), '../../../shared/utils')
+if shared_utils_path not in sys.path:
+    sys.path.insert(0, shared_utils_path)
+from timezone_utils import now_kst
+
 
 class WorkflowService:
     """워크플로우 오케스트레이션 서비스"""
@@ -73,9 +79,10 @@ class WorkflowService:
         target_ranges: List[DateRange] = []
         
         if not history_list:
-            # 첫 조회: 직전 하루만 수집
-            yesterday_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-            yesterday_end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            # 첫 조회: 직전 하루만 수집 (한국 시간 기준)
+            now_kst_dt = now_kst()
+            yesterday_start = now_kst_dt.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+            yesterday_end = now_kst_dt.replace(hour=0, minute=0, second=0, microsecond=0)
             target_ranges = [DateRange(yesterday_start, yesterday_end)]
         elif request_context.get('range'):
             # 명시적 범위 요청
@@ -91,9 +98,10 @@ class WorkflowService:
             last_history = history_list[-1]
             last_end = last_history.actual_end
             
-            # 마지막 수집일의 다음 날 시작
+            # 마지막 수집일의 다음 날 시작 (한국 시간 기준)
             next_start = (last_end + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            now_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+            now_kst_dt = now_kst()
+            now_end = now_kst_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             
             if next_start <= now_end:
                 target_ranges = [DateRange(next_start, now_end)]
@@ -156,8 +164,8 @@ class WorkflowService:
                     requested_end=request_context.get('range', {}).get('end') if request_context.get('range') else None
                 )
             
-            # 키워드의 last_crawled_at 업데이트
-            await KeywordRepository.update_last_crawled_at(keyword_id, datetime.now())
+            # 키워드의 last_crawled_at 업데이트 (한국 시간 기준)
+            await KeywordRepository.update_last_crawled_at(keyword_id, now_kst())
         
         return {
             'articles': all_articles,

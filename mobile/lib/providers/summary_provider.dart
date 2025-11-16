@@ -84,6 +84,9 @@ final dailySummaryProvider =
 });
 
 SummaryStatus _resolveSummaryStatus(Summary summary) {
+  if (summary.isPending) {
+    return SummaryStatus.pending;
+  }
   final hasSummaryContent = summary.summaryText.trim().isNotEmpty;
   final hasArticles = summary.articlesCount > 0;
   return (hasSummaryContent || hasArticles)
@@ -200,11 +203,30 @@ class DailySummaryNotifier extends StateNotifier<DailySummaryState> {
               ),
             ),
           );
+          
+          // available_dates에서 가장 최근 날짜 자동 선택
+          DateTime autoSelectedDate = targetDate;
+          final availableDates = summary.availableDates;
+          if (availableDates.isNotEmpty) {
+            final now = _normalizeDate(DateTime.now());
+            final isTodaySelected = _normalizeDate(targetDate) == now;
+            final isSelectedDateAvailable = availableDates.any(
+              (d) => _normalizeDate(d) == _normalizeDate(targetDate),
+            );
+            
+            // 현재 선택된 날짜가 available_dates에 없거나, 오늘이 선택되었는데 오늘 데이터가 없으면 가장 최근 날짜로 자동 선택
+            if (!isSelectedDateAvailable || (isTodaySelected && !isSelectedDateAvailable)) {
+              // available_dates는 내림차순으로 정렬되어 있으므로 첫 번째가 가장 최근 날짜
+              autoSelectedDate = availableDates.first;
+            }
+          }
+          
           state = state.copyWith(
             summary: summary,
             status: _resolveSummaryStatus(summary),
             error: null,
-            availableDates: summary.availableDates,
+            selectedDate: autoSelectedDate,
+            availableDates: availableDates,
             showSkeleton: false,
             clearError: true,
           );
@@ -214,9 +236,17 @@ class DailySummaryNotifier extends StateNotifier<DailySummaryState> {
             final pendingDates = detail is Map<String, dynamic>
                 ? _parseAvailableDates(previousDates, detail['available_dates'])
                 : previousDates;
+            
+            // available_dates가 있으면 가장 최근 날짜로 자동 선택
+            DateTime autoSelectedDate = targetDate;
+            if (pendingDates.isNotEmpty) {
+              autoSelectedDate = pendingDates.first;
+            }
+            
             state = state.copyWith(
               status: SummaryStatus.pending,
               error: null,
+              selectedDate: autoSelectedDate,
               availableDates: pendingDates,
               clearSummary: true,
               showSkeleton: false,
@@ -267,6 +297,10 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
   final _dateFormatter = DateFormat('yyyy-MM-dd');
   final CacheService _cacheService = CacheService();
   int _activeRequestId = 0;
+  Timer? _pendingRetryTimer;
+  int _pendingRetryCount = 0;
+  static const int _maxPendingRetries = 5;
+  static const Duration _pendingRetryDelay = Duration(seconds: 3);
 
   DateTime _normalizeDate(DateTime date) {
     return DateTime(date.year, date.month, date.day);
@@ -301,6 +335,57 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
       }
     }
     return fallback;
+  }
+
+  void _resetPendingRetry() {
+    _pendingRetryTimer?.cancel();
+    _pendingRetryTimer = null;
+    _pendingRetryCount = 0;
+  }
+
+  void _schedulePendingRetry(DateTime targetDate) {
+    final normalizedTarget = _normalizeDate(targetDate);
+    if (_pendingRetryCount >= _maxPendingRetries) {
+      state = state.copyWith(
+        status: SummaryStatus.error,
+        error: '요약 생성이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.',
+        showSkeleton: false,
+      );
+      return;
+    }
+    _pendingRetryCount += 1;
+    _pendingRetryTimer?.cancel();
+    _pendingRetryTimer = Timer(_pendingRetryDelay, () {
+      unawaited(loadSummary(date: normalizedTarget));
+    });
+  }
+
+  void _handlePendingSummaryResponse(Summary summary, DateTime targetDate) {
+    final normalizedTarget = _normalizeDate(targetDate);
+    final pendingDatesSource = summary.availableDates.isNotEmpty
+        ? summary.availableDates
+        : state.availableDates;
+    final normalizedDates = pendingDatesSource
+        .map(_parseDateValue)
+        .whereType<DateTime>()
+        .toList(growable: false);
+    final selectedDate =
+        normalizedDates.isNotEmpty ? normalizedDates.first : normalizedTarget;
+    state = state.copyWith(
+      status: SummaryStatus.pending,
+      selectedDate: selectedDate,
+      availableDates: normalizedDates,
+      clearSummary: true,
+      showSkeleton: false,
+      clearError: true,
+    );
+    _schedulePendingRetry(selectedDate);
+  }
+
+  @override
+  void dispose() {
+    _pendingRetryTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> loadSummary({DateTime? date}) async {
@@ -355,6 +440,13 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
               date: _dateFormatter.format(targetDate),
             ),
           );
+          if (summary.isPending) {
+            _handlePendingSummaryResponse(summary, targetDate);
+            return;
+          }
+
+          _resetPendingRetry();
+
           unawaited(
             PerformanceMonitor.trackAsync(
               label: 'CacheService.cacheSummary',
@@ -365,11 +457,30 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
               ),
             ),
           );
+          
+          // available_dates에서 가장 최근 날짜 자동 선택
+          DateTime autoSelectedDate = targetDate;
+          final availableDates = summary.availableDates;
+          if (availableDates.isNotEmpty) {
+            final now = _normalizeDate(DateTime.now());
+            final isTodaySelected = _normalizeDate(targetDate) == now;
+            final isSelectedDateAvailable = availableDates.any(
+              (d) => _normalizeDate(d) == _normalizeDate(targetDate),
+            );
+            
+            // 현재 선택된 날짜가 available_dates에 없거나, 오늘이 선택되었는데 오늘 데이터가 없으면 가장 최근 날짜로 자동 선택
+            if (!isSelectedDateAvailable || (isTodaySelected && !isSelectedDateAvailable)) {
+              // available_dates는 내림차순으로 정렬되어 있으므로 첫 번째가 가장 최근 날짜
+              autoSelectedDate = availableDates.first;
+            }
+          }
+          
           state = state.copyWith(
             summary: summary,
             status: _resolveSummaryStatus(summary),
             error: null,
-            availableDates: summary.availableDates,
+            selectedDate: autoSelectedDate,
+            availableDates: availableDates,
             showSkeleton: false,
             clearError: true,
           );
@@ -379,20 +490,30 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
             final pendingDates = detail is Map<String, dynamic>
                 ? _parseAvailableDates(previousDates, detail['available_dates'])
                 : previousDates;
+            
+            // available_dates가 있으면 가장 최근 날짜로 자동 선택
+            DateTime autoSelectedDate = targetDate;
+            if (pendingDates.isNotEmpty) {
+              autoSelectedDate = pendingDates.first;
+            }
+            
             state = state.copyWith(
               status: SummaryStatus.pending,
               error: null,
+              selectedDate: autoSelectedDate,
               availableDates: pendingDates,
               clearSummary: true,
               showSkeleton: false,
               clearError: true,
             );
+            _schedulePendingRetry(autoSelectedDate);
           } else {
             state = state.copyWith(
               status: SummaryStatus.error,
               error: e.message ?? e.toString(),
               showSkeleton: false,
             );
+            _resetPendingRetry();
           }
         } catch (e) {
           state = state.copyWith(
@@ -402,6 +523,7 @@ class KeywordSummaryNotifier extends StateNotifier<DailySummaryState> {
             clearSummary: true,
             showSkeleton: false,
           );
+          _resetPendingRetry();
         }
       },
     );

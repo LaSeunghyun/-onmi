@@ -110,16 +110,26 @@ uvicorn_logger.propagate = False  # 루트 로거로 전파 방지
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
 uvicorn_access_logger.setLevel(logging.INFO)
 uvicorn_access_logger.handlers = []  # 기존 핸들러 제거
-uvicorn_access_logger.addHandler(UTF8StreamHandler(sys.stdout))
+uvicorn_access_logger.addHandler(UTF8StreamHandler(sys.stdout))  # 콘솔 출력
+uvicorn_access_logger.addHandler(logging.FileHandler(log_file, encoding='utf-8'))  # 파일 출력
 uvicorn_access_logger.propagate = False  # 루트 로거로 전파 방지
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """서버 시작/종료 시 실행되는 lifespan 이벤트"""
+    from datetime import datetime, timezone, timedelta
+    
+    # 한국 시간대 (KST = UTC+9)
+    KST = timezone(timedelta(hours=9))
+    
     # 서버 시작 시
+    now_utc = datetime.now(timezone.utc)
+    now_kst = now_utc.astimezone(KST)
     logger.info("=" * 80)
     logger.info("서버 시작 중...")
+    logger.info(f"현재 시간 (UTC): {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    logger.info(f"현재 시간 (KST): {now_kst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     logger.info("=" * 80)
     
     db_initialized = False
@@ -345,6 +355,19 @@ async def health():
 # 직접 실행 시 uvicorn 서버 시작
 if __name__ == "__main__":
     import uvicorn
+    from datetime import datetime, timezone, timedelta
+    
+    # 한국 시간대 (KST = UTC+9)
+    KST = timezone(timedelta(hours=9))
+    
+    # 현재 시간을 한국 시간으로 변환하여 로그 출력
+    now_utc = datetime.now(timezone.utc)
+    now_kst = now_utc.astimezone(KST)
+    logger.info("=" * 80)
+    logger.info(f"서버 시작 시간 (UTC): {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    logger.info(f"서버 시작 시간 (KST): {now_kst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    logger.info("=" * 80)
+    
     # 현재 파일의 디렉토리를 기준으로 작업 디렉토리 설정
     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(app_dir)
@@ -354,6 +377,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
-        reload_dirs=[app_dir]
+        reload_dirs=[app_dir],
+        access_log=True  # HTTP 요청/응답 로깅 활성화
     )
 

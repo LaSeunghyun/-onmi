@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/cse_query_usage_provider.dart';
 import '../providers/summary_provider.dart';
 import '../providers/feed_provider.dart';
+import '../providers/keyword_provider.dart';
 import '../models/summary.dart';
 import '../utils/responsive.dart';
 import '../utils/summary_parser.dart';
@@ -92,6 +93,7 @@ class InsightSummaryCard extends ConsumerWidget {
           child: InkWell(
             onTap: () {
               final articles = ref.read(feedProvider).articles;
+              final keywords = ref.read(keywordProvider);
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -99,6 +101,7 @@ class InsightSummaryCard extends ConsumerWidget {
                     summary: summaryState.summary!,
                     title: title,
                     articles: articles,
+                    keywords: keywords,
                   ),
                 ),
               );

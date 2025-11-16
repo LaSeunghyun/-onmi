@@ -1,10 +1,11 @@
 """요약 생성 서비스"""
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from uuid import UUID
 import sys
 import os
 import asyncio
 import logging
+import re
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -12,9 +13,16 @@ from repositories.article_repository import ArticleRepository
 from repositories.summary_session_repository import SummarySessionRepository
 from repositories.feedback_repository import FeedbackRepository
 from repositories.keyword_repository import KeywordRepository
+from repositories.fetch_history_repository import FetchHistoryRepository
 from services.token_tracker import TokenTracker
 from config.settings import settings
 from utils.performance import track_async_performance
+
+# timezone_utils는 shared/utils에 있으므로 직접 import
+shared_utils_path = os.path.join(os.path.dirname(__file__), '../../../shared/utils')
+if shared_utils_path not in sys.path:
+    sys.path.insert(0, shared_utils_path)
+from timezone_utils import utc_to_kst, now_kst
 
 # Gemini API 라이브러리 import (선택적)
 try:
@@ -78,6 +86,7 @@ class Summarizer:
         config: Dict[str, Any],
         keyword_text: Optional[str] = None,
         keyword_summaries: Optional[List[Dict[str, Any]]] = None,
+        previous_summaries: Optional[List[str]] = None,
     ) -> Tuple[str, Optional[Dict[str, int]]]:
         """기사 목록으로부터 요약 생성
         
@@ -101,6 +110,7 @@ class Summarizer:
                 config,
                 keyword_text,
                 keyword_summaries=keyword_summaries,
+                previous_summaries=previous_summaries,
             )
         except Exception as e:
             logger.error(f"Gemini API 요약 생성 실패: {e}")
@@ -112,6 +122,7 @@ class Summarizer:
         config: Dict[str, Any],
         keyword_text: Optional[str],
         keyword_summaries: Optional[List[Dict[str, Any]]] = None,
+        previous_summaries: Optional[List[str]] = None,
     ) -> Tuple[str, Optional[Dict[str, int]]]:
         """Gemini API를 사용한 요약 생성"""
         # 키워드 텍스트 결정
@@ -158,29 +169,45 @@ class Summarizer:
                 reference_lines.append("\n".join(entry_lines))
             reference_section = (
                 "아래는 각각의 키워드에 대해 이미 생성된 요약입니다. "
-                "전체 관점에서 통합 요약을 작성할 때 참고하되, 그대로 반복하지 말고 교차 분석된 통찰을 도출하세요.\n"
+                "이 키워드별 요약들을 반드시 참고하여 전체 요약을 작성하세요:\n"
+                "- 각 키워드별 요약의 핵심 내용을 파악하고, 키워드 간 연관성과 공통 주제를 찾아 통합하세요.\n"
+                "- 키워드별 요약을 단순히 나열하거나 반복하지 말고, 교차 분석을 통해 새로운 통찰을 도출하세요.\n"
+                "- 전체 요약 섹션에서는 이러한 통합된 관점을 바탕으로 한눈에 읽기 쉬운 형태로 핵심을 요약하세요.\n"
                 + "\n".join(reference_lines)
             )
 
+        history_section = self._build_history_prompt(previous_summaries)
+        history_sentences = self._build_history_sentences(previous_summaries)
+
         # 프롬프트 작성
-        max_length = config.get('max_length', 500)
+        max_length = config.get('max_length', 1000)
         overview_heading = "전체 요약" if keyword_text == "일일 요약" else f"{keyword_text} 핵심 요약"
         prompt = f"""'{keyword_text}' 키워드와 관련된 {len(articles_with_url)}개의 뉴스 기사들을 바탕으로, '{keyword_text}'와 관련된 이슈를 요약해주세요.
 
-중요한 원칙:
+중요한 원칙 (절대 준수 필수):
 - 제공된 기사 내용에 대해서만 요약해주세요. 기사에 없는 정보나 학습 데이터의 일반적인 지식을 추가하지 마세요.
 - 기사에서 명시적으로 언급된 사실과 내용만을 바탕으로 요약을 작성해주세요.
-- 추측이나 일반적인 상식은 포함하지 말고, 오직 제공된 기사 내용만을 기반으로 작성해주세요.
+- 추측이나 일반적인 상식은 절대 포함하지 말고, 오직 제공된 기사 내용만을 기반으로 작성해주세요.
+- 기사에 명시되지 않은 수치, 비율, 날짜, 사실은 절대 작성하지 마세요.
+- 기사에 없는 정보를 추가하거나 추측하여 작성하는 것은 엄격히 금지됩니다.
 - 반드시 한국어로 작성해주세요.
 
 출력 형식 규칙:
 1. 인삿말 없이 바로 제목부터 작성합니다.
-2. 가장 먼저 '**{overview_heading}**' 제목을 작성한 뒤, 2개 이상 bullet('- ')으로 전체 요약을 제공합니다.
-3. 이후 주요 이슈마다 '**[주요 주제명]**' 형태의 제목을 작성하고, 각 제목 아래에 최소 2개의 bullet('- ')을 작성합니다.
-4. bullet 하나당 한 문장으로 작성하고, 필요할 때 기사 번호(예: 기사 1)와 감성(긍정/부정/중립)을 괄호로 명시합니다.
-5. 제목과 본문 사이, 섹션 사이에는 빈 줄을 정확히 한 줄씩 넣습니다.
-6. 모든 제목은 반드시 **로 감싸 굵게 표기합니다.
-7. 전체 글 길이는 약 {max_length}자 이내로 유지합니다.
+2. 가장 먼저 '**{overview_heading}**' 제목을 작성한 뒤, 최소 5개 이상의 bullet('- ')으로 전체 요약을 상세하게 제공합니다.
+   - 각 bullet은 기사에서 언급된 주요 사실과 맥락을 충실히 반영해야 합니다.
+   - 간략하게 요약하지 말고, 기사에서 언급된 주요 사실과 맥락을 모두 포함하여 상세하게 작성합니다.
+   - 키워드별 요약이 제공된 경우, 이를 참고하되 기사 내용과 일치하는지 확인하고 기사 내용을 우선시합니다.
+3. 이후 주요 이슈마다 '**[주요 주제명]**' 형태의 제목을 작성하고, 각 제목 아래에 최소 3개 이상의 bullet('- ')을 작성합니다.
+   - 각 bullet은 해당 주제와 관련된 기사 내용을 상세하게 반영해야 합니다.
+4. 각 주요 주제 섹션의 bullet 목록 뒤에는 반드시 '**생각해볼 포인트**' 제목을 추가하고, 해당 주제에 대해 사용자가 고민해볼 질문이나 인사이트를 최소 2개 이상의 bullet('- ')으로 제시합니다.
+5. bullet 하나당 한 문장으로 작성하고, 감성(긍정/부정/중립)을 괄호로 명시합니다.
+6. 모든 bullet 뒤에는 가독성을 위해 빈 줄을 한 줄씩 삽입합니다.
+7. 제목과 본문 사이, 섹션 사이에는 빈 줄을 정확히 한 줄씩 넣습니다.
+8. 모든 제목은 반드시 **로 감싸 굵게 표기합니다.
+9. 전체 글 길이는 약 {max_length}자 이내로 유지하되, 기사 내용을 충실히 반영하여 상세하게 작성합니다.
+10. 전체 기사 내용을 충실히 반영하여 상세하게 요약하세요. 간략하게 요약하지 말고, 기사에서 언급된 주요 사실과 맥락을 모두 포함하세요.
+11. 아래 제공된 이전 요약 내용과 중복되는 문장을 반복하지 말고, 동일한 사실을 다시 서술하지 않도록 주의하세요.
 
 기사 목록:
 {all_articles_text}
@@ -188,8 +215,12 @@ class Summarizer:
 참고 자료:
 {reference_section if reference_section else "현재 참고할 키워드별 요약은 제공되지 않습니다."}
 
+이전 요약 기록:
+{history_section if history_section else "현재 참고할 이전 요약 기록이 없습니다."}
+
 위 기사들을 읽고, 위 형식을 지키며 '{keyword_text}'와 관련된 이슈를 요약해주세요. 
-기사에 없는 정보는 포함하지 말고, 제공된 기사 내용만 사용하세요."""
+기사에 없는 정보는 절대 포함하지 말고, 제공된 기사 내용만 사용하세요.
+{'키워드별 요약이 제공된 경우, 반드시 이를 참고하여 전체 요약 섹션을 작성하세요. 각 키워드의 내용을 단순 나열하지 말고, 통합된 관점에서 핵심을 요약하되, 기사 내용과 일치하는지 확인하고 기사 내용을 우선시하세요.' if reference_section else ''}"""
         
         # GenerationConfig 설정 (temperature 0.5)
         generation_config = genai.types.GenerationConfig(
@@ -210,6 +241,25 @@ class Summarizer:
             if response and response.text:
                 summary = response.text.strip()
                 
+                # 기사 번호 참조 제거 (예: "기사 9, 10, 11" 또는 "(기사 1, 2)" 등)
+                # 괄호 안의 기사 번호 패턴 제거: (기사 9, 10, 11) 또는 (기사 1, 2-3)
+                summary = re.sub(r'\(기사\s+\d+(?:\s*[,\-]\s*\d+)*\)', '', summary)
+                # 괄호 없는 기사 번호 패턴 제거: 기사 9, 10, 11 또는 기사 1-3
+                summary = re.sub(r'기사\s+\d+(?:\s*[,\-]\s*\d+)*', '', summary)
+                # "기사 N에 따르면" 같은 패턴도 제거
+                summary = re.sub(r'기사\s+\d+에\s+따르면', '', summary)
+                # 연속된 쉼표나 괄호 정리
+                summary = re.sub(r'\s*,\s*,+', '', summary)  # 연속된 쉼표 제거
+                summary = re.sub(r'\(\s*\)', '', summary)  # 빈 괄호 제거
+                summary = re.sub(r'\s*\(\s*\)\s*', '', summary)  # 빈 괄호와 주변 공백 제거
+                summary = re.sub(r'\s+', ' ', summary)  # 연속된 공백을 하나로
+                summary = re.sub(r'\s*,\s*$', '', summary)  # 문장 끝의 쉼표 제거
+                summary = summary.strip()
+
+                summary = self._apply_bullet_spacing(summary)
+                if history_sentences:
+                    summary = self._remove_duplicate_points(summary, history_sentences)
+                
                 # 토큰 사용량 추출
                 token_usage = None
                 if hasattr(response, 'usage_metadata') and response.usage_metadata:
@@ -226,6 +276,99 @@ class Summarizer:
         except asyncio.TimeoutError:
             raise TimeoutError("Gemini API 호출이 120초 내에 완료되지 않았습니다.")
 
+    def _build_history_prompt(self, previous_summaries: Optional[List[str]]) -> str:
+        if not previous_summaries:
+            return ""
+        max_entries = 5
+        snippets: List[str] = []
+        for index, text in enumerate(previous_summaries[:max_entries], 1):
+            if not isinstance(text, str):
+                continue
+            normalized = re.sub(r'\s+', ' ', text.strip())
+            if not normalized:
+                continue
+            if len(normalized) > 500:
+                normalized = normalized[:500].rstrip() + "..."
+            snippets.append(f"{index}. {normalized}")
+        return "\n".join(snippets)
+
+    def _build_history_sentences(
+        self,
+        previous_summaries: Optional[List[str]],
+    ) -> Set[str]:
+        sentences: Set[str] = set()
+        if not previous_summaries:
+            return sentences
+        for text in previous_summaries:
+            if not isinstance(text, str):
+                continue
+            for line in text.splitlines():
+                normalized = self._normalize_line_for_dedup(line)
+                if normalized:
+                    sentences.add(normalized)
+        return sentences
+
+    def _normalize_line_for_dedup(self, line: str) -> str:
+        stripped = line.strip()
+        if not stripped:
+            return ""
+        stripped = re.sub(r'^[\-\•\·\s]+', '', stripped)
+        stripped = re.sub(r'\s+', ' ', stripped)
+        return stripped.lower()
+
+    def _cleanup_blank_lines(self, lines: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        for line in lines:
+            if not line.strip():
+                if cleaned and cleaned[-1] == '':
+                    continue
+                if cleaned:
+                    cleaned.append('')
+                continue
+            cleaned.append(line.rstrip())
+        while cleaned and cleaned[-1] == '':
+            cleaned.pop()
+        return cleaned
+
+    def _apply_bullet_spacing(self, text: str) -> str:
+        if not text:
+            return text
+        lines = [line.rstrip() for line in text.splitlines()]
+        spaced: List[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                spaced.append('')
+                continue
+            spaced.append(line.rstrip())
+            if stripped.startswith('- '):
+                spaced.append('')
+        cleaned = self._cleanup_blank_lines(spaced)
+        return "\n".join(cleaned)
+
+    def _remove_duplicate_points(self, summary: str, seen_sentences: Set[str]) -> str:
+        lines = summary.splitlines()
+        filtered: List[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                filtered.append('')
+                continue
+            is_heading = stripped.startswith('**') and stripped.endswith('**')
+            if is_heading:
+                filtered.append(line.rstrip())
+                continue
+            normalized = self._normalize_line_for_dedup(stripped)
+            if not normalized:
+                filtered.append(line.rstrip())
+                continue
+            if normalized in seen_sentences:
+                continue
+            seen_sentences.add(normalized)
+            filtered.append(line.rstrip())
+        cleaned = self._cleanup_blank_lines(filtered)
+        return "\n".join(cleaned)
+
 
 class SummaryPolicy:
     """피드백 기반 요약 정책 조정"""
@@ -240,7 +383,7 @@ class SummaryPolicy:
         if total_count == 0:
             return {
                 'detail_level': 'standard',
-                'max_length': 500,
+                'max_length': 1000,
                 'include_sentiment': True,
                 'include_keywords': False,
                 'include_sources': False,
@@ -251,7 +394,7 @@ class SummaryPolicy:
             # 높은 만족도: 현재 수준 유지
             return {
                 'detail_level': 'maintain_current',
-                'max_length': 500,
+                'max_length': 1000,
                 'include_sentiment': True,
                 'include_keywords': False,
                 'include_sources': False,
@@ -261,7 +404,7 @@ class SummaryPolicy:
             # 중간 만족도: 더 많은 맥락 제공
             return {
                 'detail_level': 'tweak_for_more_context',
-                'max_length': 600,
+                'max_length': 1200,
                 'include_sentiment': True,
                 'include_keywords': True,
                 'include_sources': False,
@@ -271,7 +414,7 @@ class SummaryPolicy:
             # 낮은 만족도: 상세 정보 증가
             return {
                 'detail_level': 'increase_detail',
-                'max_length': 800,
+                'max_length': 1500,
                 'include_sentiment': True,
                 'include_keywords': True,
                 'include_sources': True,
@@ -326,17 +469,44 @@ class SummaryService:
         summary_text = (latest_summary or {}).get("summary_text")
         if latest_summary and summary_text:
             created_at = latest_summary.get("created_at")
-            async with track_async_performance(
-                "ArticleRepository.count_recent_by_keyword",
-                logger,
-                metadata={
-                    "keyword_id": str(keyword_id),
-                    "include_archived": include_archived,
-                },
-            ):
-                articles_count = await ArticleRepository.count_recent_by_keyword(
-                    keyword_id, include_archived=include_archived
-                )
+            
+            # 마지막 수집 시간 조회
+            last_fetch_end_utc = None
+            try:
+                last_fetch_end_utc = await FetchHistoryRepository.get_latest_fetch_end_by_keyword(keyword_id)
+            except Exception as e:
+                logger.warning(f"마지막 수집 시간 조회 실패: {e}")
+                last_fetch_end_utc = None
+            
+            # 기사 개수 조회 (날짜 필터 적용)
+            if last_fetch_end_utc:
+                async with track_async_performance(
+                    "ArticleRepository.count_recent_by_keyword_since",
+                    logger,
+                    metadata={
+                        "keyword_id": str(keyword_id),
+                        "since_datetime": str(last_fetch_end_utc),
+                        "include_archived": include_archived,
+                    },
+                ):
+                    articles_count = await ArticleRepository.count_recent_by_keyword_since(
+                        keyword_id, 
+                        since_datetime=last_fetch_end_utc, 
+                        include_archived=include_archived
+                    )
+            else:
+                async with track_async_performance(
+                    "ArticleRepository.count_recent_by_keyword",
+                    logger,
+                    metadata={
+                        "keyword_id": str(keyword_id),
+                        "include_archived": include_archived,
+                    },
+                ):
+                    articles_count = await ArticleRepository.count_recent_by_keyword(
+                        keyword_id, include_archived=include_archived
+                    )
+            
             return {
                 "keyword_id": str(keyword_id),
                 "keyword_text": keyword_text,
@@ -379,19 +549,52 @@ class SummaryService:
             user_id (UUID): 사용자 ID
             include_archived (bool): 소프트 삭제된 키워드 포함 여부
         """
-        async def _fetch_articles():
+        # 마지막 수집 시간 조회 (사용자 전체)
+        last_fetch_end_utc = None
+        try:
             async with track_async_performance(
-                "ArticleRepository.fetch_recent_by_user",
+                "FetchHistoryRepository.get_latest_fetch_end_by_user",
                 logger,
-                metadata={
-                    "user_id": str(user_id),
-                    "limit": 100,
-                    "include_archived": include_archived,
-                },
+                metadata={"user_id": str(user_id)},
             ):
-                return await ArticleRepository.fetch_recent_by_user(
-                    user_id, limit=100, include_archived=include_archived
-                )
+                last_fetch_end_utc = await FetchHistoryRepository.get_latest_fetch_end_by_user(user_id)
+        except Exception as e:
+            logger.warning(f"마지막 수집 시간 조회 실패: {e}")
+            last_fetch_end_utc = None
+        
+        async def _fetch_articles():
+            if last_fetch_end_utc is None:
+                # 첫 수집인 경우: 전체 기사 조회 (기존 동작)
+                async with track_async_performance(
+                    "ArticleRepository.fetch_recent_by_user",
+                    logger,
+                    metadata={
+                        "user_id": str(user_id),
+                        "limit": 100,
+                        "include_archived": include_archived,
+                    },
+                ):
+                    return await ArticleRepository.fetch_recent_by_user(
+                        user_id, limit=100, include_archived=include_archived
+                    )
+            else:
+                # 마지막 수집 이후 기사만 조회
+                async with track_async_performance(
+                    "ArticleRepository.fetch_recent_by_user_since",
+                    logger,
+                    metadata={
+                        "user_id": str(user_id),
+                        "since_datetime": str(last_fetch_end_utc),
+                        "limit": 100,
+                        "include_archived": include_archived,
+                    },
+                ):
+                    return await ArticleRepository.fetch_recent_by_user_since(
+                        user_id,
+                        since_datetime=last_fetch_end_utc,
+                        limit=100,
+                        include_archived=include_archived
+                    )
 
         async def _fetch_feedback():
             async with track_async_performance(
@@ -409,13 +612,39 @@ class SummaryService:
             ):
                 return await KeywordRepository.list_active_by_user(user_id)
 
-        articles, feedback_stats, keywords = await asyncio.gather(
+        async def _fetch_previous_summaries():
+            try:
+                return await SummarySessionRepository.list_summary_texts(
+                    user_id=user_id,
+                    summary_type='daily',
+                )
+            except Exception as exc:
+                logger.warning(
+                    "이전 일일 요약 조회 실패: %s (user_id=%s)",
+                    exc,
+                    user_id,
+                )
+                return []
+
+        articles, feedback_stats, keywords, previous_summaries = await asyncio.gather(
             _fetch_articles(),
             _fetch_feedback(),
             _fetch_keywords(),
+            _fetch_previous_summaries(),
         )
         
         valid_articles = _filter_articles_with_url(articles)
+        
+        # 기사가 없으면 요약 생성하지 않고 반환
+        if not valid_articles:
+            config = self.policy.tune(feedback_stats)
+            return {
+                'session_id': None,
+                'summary_text': '수집된 기사가 없습니다.',
+                'articles_count': 0,
+                'config': config,
+                'created_at': None
+            }
 
         keyword_summaries: List[Dict[str, Any]] = []
         for keyword in keywords:
@@ -455,6 +684,7 @@ class SummaryService:
                 config,
                 keyword_text,
                 keyword_summaries=keyword_summaries or None,
+                previous_summaries=previous_summaries,
             )
         
         # 토큰 사용량 처리 (Gemini API에서 실제 토큰 사용량 추출)
@@ -537,21 +767,55 @@ class SummaryService:
         
         keyword_text = keyword.get('text', '키워드')
         
+        # 마지막 수집 시간 조회
+        last_fetch_end_utc = None
+        try:
+            async with track_async_performance(
+                "FetchHistoryRepository.get_latest_fetch_end_by_keyword",
+                logger,
+                metadata={"keyword_id": str(keyword_id)},
+            ):
+                last_fetch_end_utc = await FetchHistoryRepository.get_latest_fetch_end_by_keyword(keyword_id)
+        except Exception as e:
+            logger.warning(f"마지막 수집 시간 조회 실패: {e}")
+            last_fetch_end_utc = None
+        
         # 키워드별 최근 기사 조회
         async def _fetch_keyword_articles():
-            async with track_async_performance(
-                "ArticleRepository.fetch_recent_by_keyword",
-                logger,
-                metadata={
-                    "keyword_id": str(keyword_id),
-                    "user_id": str(user_id),
-                    "limit": 50,
-                    "include_archived": include_archived,
-                },
-            ):
-                return await ArticleRepository.fetch_recent_by_keyword(
-                    keyword_id, limit=50, include_archived=include_archived
-                )
+            if last_fetch_end_utc is None:
+                # 첫 수집인 경우: 전체 기사 조회 (기존 동작)
+                async with track_async_performance(
+                    "ArticleRepository.fetch_recent_by_keyword",
+                    logger,
+                    metadata={
+                        "keyword_id": str(keyword_id),
+                        "user_id": str(user_id),
+                        "limit": 50,
+                        "include_archived": include_archived,
+                    },
+                ):
+                    return await ArticleRepository.fetch_recent_by_keyword(
+                        keyword_id, limit=50, include_archived=include_archived
+                    )
+            else:
+                # 마지막 수집 이후 기사만 조회
+                async with track_async_performance(
+                    "ArticleRepository.fetch_recent_by_keyword_since",
+                    logger,
+                    metadata={
+                        "keyword_id": str(keyword_id),
+                        "user_id": str(user_id),
+                        "since_datetime": str(last_fetch_end_utc),
+                        "limit": 50,
+                        "include_archived": include_archived,
+                    },
+                ):
+                    return await ArticleRepository.fetch_recent_by_keyword_since(
+                        keyword_id,
+                        since_datetime=last_fetch_end_utc,
+                        limit=50,
+                        include_archived=include_archived
+                    )
 
         async def _fetch_keyword_feedback():
             async with track_async_performance(
@@ -561,17 +825,45 @@ class SummaryService:
             ):
                 return await FeedbackRepository.aggregate_by_keyword(keyword_id, user_id)
 
+        async def _fetch_previous_keyword_summaries():
+            try:
+                return await SummarySessionRepository.list_summary_texts(
+                    user_id=user_id,
+                    keyword_id=keyword_id,
+                    summary_type='keyword',
+                )
+            except Exception as exc:
+                logger.warning(
+                    "이전 키워드 요약 조회 실패: %s (keyword_id=%s, user_id=%s)",
+                    exc,
+                    keyword_id,
+                    user_id,
+                )
+                return []
+
         try:
-            articles, feedback_stats = await asyncio.gather(
+            articles, feedback_stats, previous_summaries = await asyncio.gather(
                 _fetch_keyword_articles(),
                 _fetch_keyword_feedback(),
+                _fetch_previous_keyword_summaries(),
             )
         except Exception as e:
             logger.warning(f"피드백 통계 조회 실패, 기본값 사용: {e}")
             articles = await _fetch_keyword_articles()
             feedback_stats = {}
+            previous_summaries = await _fetch_previous_keyword_summaries()
 
         valid_articles = _filter_articles_with_url(articles)
+        
+        # 기사가 없으면 요약 생성하지 않고 반환
+        if not valid_articles:
+            config = self.policy.tune(feedback_stats)
+            return {
+                'session_id': None,
+                'summary_text': '수집된 기사가 없습니다.',
+                'articles_count': 0,
+                'config': config
+            }
         
         # 요약 정책 조정
         config = self.policy.tune(feedback_stats)
@@ -588,7 +880,12 @@ class SummaryService:
             },
             threshold_ms=1000,
         ):
-            summary_text, token_usage = await self.summarizer.generate(articles, config, keyword_text)
+            summary_text, token_usage = await self.summarizer.generate(
+                articles,
+                config,
+                keyword_text,
+                previous_summaries=previous_summaries,
+            )
         
         # 토큰 사용량 처리 (Gemini API에서 실제 토큰 사용량 추출)
         if token_usage:

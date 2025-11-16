@@ -3,21 +3,25 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/summary.dart';
 import '../../models/article.dart';
+import '../../models/keyword.dart';
 import '../../utils/responsive.dart';
 import '../../utils/summary_parser.dart';
 import '../../providers/feed_provider.dart';
+import '../../providers/keyword_provider.dart';
 import '../article_detail/article_detail_screen.dart';
 
 class SummaryDetailScreen extends ConsumerWidget {
   final Summary summary;
   final String title;
   final List<Article>? articles;
+  final List<Keyword>? keywords;
 
   const SummaryDetailScreen({
     super.key,
     required this.summary,
     required this.title,
     this.articles,
+    this.keywords,
   });
 
   String _sanitizeSummary(String raw) {
@@ -26,6 +30,35 @@ class SummaryDetailScreen extends ConsumerWidget {
       text = text.replaceFirst('주요 뉴스 요약:', '').trimLeft();
     }
     return text;
+  }
+
+  /// 섹션 제목과 키워드를 매칭하여 해당 키워드를 반환
+  String? _findMatchingKeyword(String sectionTitle, List<Keyword> keywords) {
+    final normalizedTitle = sectionTitle.toLowerCase().trim();
+    
+    for (final keyword in keywords) {
+      final keywordText = keyword.text.toLowerCase().trim();
+      // 섹션 제목에 키워드가 포함되어 있으면 매칭
+      if (normalizedTitle.contains(keywordText) || keywordText.contains(normalizedTitle)) {
+        return keyword.text;
+      }
+    }
+    return null;
+  }
+
+  /// 키워드에 해당하는 기사만 필터링
+  List<Article> _filterArticlesByKeyword(List<Article> allArticles, String? keywordText) {
+    if (keywordText == null || keywordText.isEmpty) {
+      return allArticles;
+    }
+    
+    final normalizedKeyword = keywordText.toLowerCase().trim();
+    return allArticles.where((article) {
+      // 기사의 키워드 목록에 매칭되는 키워드가 있는지 확인
+      return article.keywords.any((articleKeyword) => 
+        articleKeyword.toLowerCase().trim() == normalizedKeyword
+      );
+    }).toList();
   }
 
   /// 텍스트를 파싱하여 클릭 가능한 위젯으로 변환
@@ -98,7 +131,9 @@ class SummaryDetailScreen extends ConsumerWidget {
             ),
           ]
         : sections;
-    final articlesList = articles ?? ref.watch(feedProvider).articles;
+    final allArticles = articles ?? ref.watch(feedProvider).articles;
+    final List<Keyword> keywordsList = keywords ?? ref.watch(keywordProvider);
+    final effectiveKeywords = keywordsList.isNotEmpty ? keywordsList : <Keyword>[];
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -193,9 +228,22 @@ class SummaryDetailScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             for (final section in displayedSections) ...[
-                              _SummaryDetailSection(
-                                section: section,
-                                buildSpans: (text) => _buildTextSpans(text, articlesList, context),
+                              Builder(
+                                builder: (context) {
+                                  // 섹션 제목과 키워드 매칭
+                                  final matchedKeyword = effectiveKeywords.isNotEmpty
+                                      ? _findMatchingKeyword(section.title, effectiveKeywords)
+                                      : null;
+                                  // 키워드에 해당하는 기사만 필터링
+                                  final filteredArticles = matchedKeyword != null
+                                      ? _filterArticlesByKeyword(allArticles, matchedKeyword)
+                                      : allArticles;
+                                  
+                                  return _SummaryDetailSection(
+                                    section: section,
+                                    buildSpans: (text) => _buildTextSpans(text, filteredArticles, context),
+                                  );
+                                },
                               ),
                               const SizedBox(height: 20),
                             ],

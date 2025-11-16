@@ -5,10 +5,12 @@ from .performance import (
     track_performance,
     track_async_performance,
 )
+from .pending_summary_registry import PendingSummaryRegistry
 
 __all__ = [
     "PerformanceEvent",
     "track_performance",
     "track_async_performance",
+    "PendingSummaryRegistry",
 ]
 

@@ -1,6 +1,7 @@
 """수집 이력 리포지토리"""
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime
 import sys
 import os
 
@@ -56,4 +57,50 @@ class FetchHistoryRepository:
                 actual_start, actual_end, articles_count
             )
             return history_id
+    
+    @staticmethod
+    async def get_latest_fetch_end_by_keyword(keyword_id: UUID) -> Optional[datetime]:
+        """키워드별 마지막 수집 종료 시간 조회
+        
+        Args:
+            keyword_id: 키워드 ID
+            
+        Returns:
+            마지막 수집 종료 시간 (actual_end), 없으면 None
+        """
+        async with get_db_connection() as conn:
+            result = await conn.fetchrow(
+                """
+                SELECT actual_end
+                FROM fetch_history
+                WHERE keyword_id = $1
+                ORDER BY actual_end DESC
+                LIMIT 1
+                """,
+                keyword_id
+            )
+            return result['actual_end'] if result else None
+    
+    @staticmethod
+    async def get_latest_fetch_end_by_user(user_id: UUID) -> Optional[datetime]:
+        """사용자별 모든 키워드 중 가장 오래된 마지막 수집 시간 조회
+        
+        Args:
+            user_id: 사용자 ID
+            
+        Returns:
+            사용자의 모든 키워드 중 가장 오래된 마지막 수집 종료 시간, 없으면 None
+        """
+        async with get_db_connection() as conn:
+            result = await conn.fetchrow(
+                """
+                SELECT MIN(fh.actual_end) as latest_fetch_end
+                FROM fetch_history fh
+                INNER JOIN keywords k ON fh.keyword_id = k.id
+                WHERE k.user_id = $1
+                  AND k.status = 'active'
+                """,
+                user_id
+            )
+            return result['latest_fetch_end'] if result and result['latest_fetch_end'] else None
 

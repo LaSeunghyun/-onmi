@@ -57,7 +57,27 @@ class _ArticleDetailScreenState extends ConsumerState<ArticleDetailScreen> {
     }
   }
 
+  bool get _hasValidUrl {
+    final url = widget.article.url.trim();
+    if (url.isEmpty) return false;
+    try {
+      final uri = Uri.parse(url);
+      return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<void> _openOriginalUrl() async {
+    if (!_hasValidUrl) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('유효한 링크가 없습니다')),
+        );
+      }
+      return;
+    }
+    
     final uri = Uri.parse(widget.article.url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -238,6 +258,34 @@ class _ArticleDetailScreenState extends ConsumerState<ArticleDetailScreen> {
                             ),
                             const SizedBox(height: 24),
                           ],
+                          // 기사 URL 표시
+                          if (_hasValidUrl) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7F8FA),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.black.withOpacity(0.08),
+                                ),
+                              ),
+                              child: SelectionArea(
+                                child: Text(
+                                  widget.article.url,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: Color(0xFF6A7282),
+                                    fontFamily: 'Noto Sans KR',
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           // 구분선
                           Container(
                             height: 1,
@@ -249,21 +297,28 @@ class _ArticleDetailScreenState extends ConsumerState<ArticleDetailScreen> {
                             width: double.infinity,
                             height: 44,
                             child: ElevatedButton.icon(
-                              onPressed: _openOriginalUrl,
+                              onPressed: _hasValidUrl ? _openOriginalUrl : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 foregroundColor: const Color(0xFF030213),
+                                disabledForegroundColor: const Color(0xFF9CA3AF),
+                                disabledBackgroundColor: const Color(0xFFF3F4F6),
                                 side: BorderSide(
-                                  color: Colors.black.withOpacity(0.12),
+                                  color: _hasValidUrl 
+                                      ? Colors.black.withOpacity(0.12)
+                                      : Colors.black.withOpacity(0.06),
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 elevation: 0,
                               ),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.open_in_new,
                                 size: 18,
+                                color: _hasValidUrl 
+                                    ? const Color(0xFF030213)
+                                    : const Color(0xFF9CA3AF),
                               ),
                               label: const Text(
                                 '원문 보기',

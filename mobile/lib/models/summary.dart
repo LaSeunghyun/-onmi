@@ -1,10 +1,15 @@
 class Summary {
+  static const String statusReady = 'ready';
+  static const String statusPending = 'pending';
+
   final String sessionId;
   final String summaryText;
   final String summaryType; // 'daily' or 'keyword'
   final int articlesCount;
   final DateTime? createdAt;
   final List<DateTime> availableDates;
+  final String status;
+  final String? message;
 
   Summary({
     required this.sessionId,
@@ -13,7 +18,11 @@ class Summary {
     required this.articlesCount,
     this.createdAt,
     this.availableDates = const [],
+    this.status = statusReady,
+    this.message,
   });
+
+  bool get isPending => status == statusPending;
 
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null || value == '') return null;
@@ -41,6 +50,8 @@ class Summary {
               .whereType<DateTime>()
               .toList() ??
           const [],
+      status: (json['status'] as String?)?.toLowerCase() ?? statusReady,
+      message: json['message'] as String?,
     );
   }
 
@@ -52,6 +63,8 @@ class Summary {
       'articles_count': articlesCount,
       'created_at': createdAt?.toIso8601String(),
       'available_dates': availableDates.map((d) => d.toIso8601String()).toList(),
+      'status': status,
+      'message': message,
     };
   }
 }

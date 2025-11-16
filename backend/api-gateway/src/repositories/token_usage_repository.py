@@ -7,6 +7,12 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 from database.connection import get_db_connection
 
+# timezone_utils는 shared/utils에 있으므로 직접 import
+shared_utils_path = os.path.join(os.path.dirname(__file__), '../../../shared/utils')
+if shared_utils_path not in sys.path:
+    sys.path.insert(0, shared_utils_path)
+from timezone_utils import now_kst
+
 
 class TokenUsageRepository:
     """시스템 전체 토큰 사용량 데이터 접근 리포지토리"""
@@ -18,9 +24,9 @@ class TokenUsageRepository:
         output_tokens: int = 0,
         usage_date: Optional[date] = None
     ) -> None:
-        """토큰 사용량 증가 (시스템 전체)"""
+        """토큰 사용량 증가 (시스템 전체) - 한국 시간 기준"""
         if usage_date is None:
-            usage_date = date.today()
+            usage_date = now_kst().date()
         
         async with get_db_connection() as conn:
             await conn.execute(
@@ -38,8 +44,8 @@ class TokenUsageRepository:
     
     @staticmethod
     async def get_today_usage() -> Dict:
-        """오늘의 토큰 사용량 조회"""
-        today = date.today()
+        """오늘의 토큰 사용량 조회 (한국 시간 기준)"""
+        today = now_kst().date()
         try:
             async with get_db_connection() as conn:
                 # 테이블 존재 여부 확인
@@ -98,8 +104,8 @@ class TokenUsageRepository:
     
     @staticmethod
     async def get_hourly_average_for_today() -> float:
-        """오늘의 시간당 평균 사용량 계산"""
-        today = date.today()
+        """오늘의 시간당 평균 사용량 계산 (한국 시간 기준)"""
+        today = now_kst().date()
         try:
             async with get_db_connection() as conn:
                 # 테이블 존재 여부 확인
@@ -128,9 +134,9 @@ class TokenUsageRepository:
                 if not row or not row['total_tokens_used']:
                     return 0.0
                 
-                # 현재 시간까지의 시간당 평균 계산
-                now = datetime.now()
-                start_of_day = datetime.combine(today, datetime.min.time())
+                # 현재 시간까지의 시간당 평균 계산 (한국 시간 기준)
+                now = now_kst()
+                start_of_day = datetime.combine(today, datetime.min.time()).replace(tzinfo=now.tzinfo)
                 hours_elapsed = max(1, (now - start_of_day).total_seconds() / 3600)
                 
                 return row['total_tokens_used'] / hours_elapsed

@@ -15,6 +15,12 @@ from database.connection import get_db_connection
 from services.token_tracker import TokenTracker
 from services.cse_query_limit_service import CSEQueryLimitService
 
+# timezone_utils는 shared/utils에 있으므로 직접 import
+shared_utils_path = os.path.join(os.path.dirname(__file__), '../../../shared/utils')
+if shared_utils_path not in sys.path:
+    sys.path.insert(0, shared_utils_path)
+from timezone_utils import now_kst
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -52,8 +58,8 @@ async def get_keyword_stats(
                     detail="키워드를 찾을 수 없습니다"
                 )
             
-            # 시작 날짜 계산
-            end_date = datetime.now().date()
+            # 시작 날짜 계산 (한국 시간 기준)
+            end_date = now_kst().date()
             start_date = end_date - timedelta(days=days - 1)
             
             # 일자별 통계 조회

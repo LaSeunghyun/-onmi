@@ -14,6 +14,7 @@ sys.path.insert(0, str(project_root / "backend" / "ingestor" / "src"))
 sys.path.insert(0, str(project_root / "backend" / "nlp-service" / "src"))
 sys.path.insert(0, str(project_root / "backend" / "api-gateway" / "src"))
 
+import json
 import asyncpg
 from config.settings import settings
 from collectors.google_cse_collector import (
@@ -93,10 +94,18 @@ class CrawlerWorker:
                 )
                 
                 # 감성 분석 결과 저장
+                # rationale이 dict인 경우 JSON 문자열로 변환
+                rationale_value = sentiment_result['rationale']
+                if isinstance(rationale_value, dict):
+                    rationale_value = json.dumps(rationale_value, ensure_ascii=False)
+                elif not isinstance(rationale_value, (str, type(None))):
+                    # 다른 타입인 경우 문자열로 변환 시도
+                    rationale_value = json.dumps(rationale_value, ensure_ascii=False) if rationale_value else None
+                
                 await db_conn.execute(
                     """
                     INSERT INTO sentiments (article_id, label, score, rationale, model_ver)
-                    VALUES ($1, $2, $3, $4, 'rule-based-v1')
+                    VALUES ($1, $2, $3, $4::jsonb, 'rule-based-v1')
                     ON CONFLICT (article_id) DO UPDATE SET
                         label = EXCLUDED.label,
                         score = EXCLUDED.score,
@@ -105,7 +114,7 @@ class CrawlerWorker:
                     article_id,
                     sentiment_result['label'],
                     sentiment_result['score'],
-                    sentiment_result['rationale']
+                    rationale_value
                 )
                 
                 saved_count += 1

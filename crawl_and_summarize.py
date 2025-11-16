@@ -119,21 +119,29 @@ async def crawl_and_summarize_keyword(keyword_id: UUID, keyword_text: str, user_
         
         logger.info(f"중복 제거 완료: {len(unique_articles)}개 기사 (제거됨: {len(all_articles) - len(unique_articles)}개)")
         
-        # 키워드 매칭 필터링 (키워드의 주요 단어가 포함된 기사만 필터링)
+        # 키워드 매칭 필터링 (전체 키워드 우선 매칭, 주요 단어 모두 포함 확인)
         logger.info(f"[3/6] 키워드 매칭 필터링 중...")
-        keyword_lower = keyword_text.lower()
-        # 키워드를 단어로 분리하여 하나라도 포함되면 매칭
+        keyword_lower = keyword_text.lower().strip()
+        # 키워드를 단어로 분리 (길이가 1보다 큰 단어만)
         keyword_words = [word.strip() for word in keyword_lower.split() if len(word.strip()) > 1]
         
         matched_articles = []
         for article in unique_articles:
             title = str(article.get('title', '')).lower()
             snippet = str(article.get('snippet', '')).lower()
+            combined_text = f"{title} {snippet}"
             
-            # 전체 키워드가 포함되거나, 주요 단어 중 하나라도 포함되면 매칭
-            if (keyword_lower in title or keyword_lower in snippet or
-                any(word in title or word in snippet for word in keyword_words)):
+            # 1. 전체 키워드가 포함되면 매칭 (최우선)
+            if keyword_lower in combined_text:
                 matched_articles.append(article)
+                continue
+            
+            # 2. 키워드가 여러 단어로 구성된 경우, 모든 주요 단어가 포함되어야 매칭
+            if len(keyword_words) > 1:
+                # 모든 주요 단어가 포함되어야 함
+                if all(word in combined_text for word in keyword_words):
+                    matched_articles.append(article)
+            # 3. 키워드가 단일 단어인 경우, 전체 키워드만 매칭 (이미 위에서 처리됨)
         
         # 매칭된 기사가 없으면 전체 키워드 매칭 없이도 일부 기사는 유지
         if len(matched_articles) == 0 and len(unique_articles) > 0:

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/date_selector.dart';
@@ -24,6 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
   String? _selectedKeyword;
+  Timer? _midnightTimer;
 
   int? _sectionCountFromSummary({
     required DailySummaryState state,
@@ -47,11 +50,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnightRefresh();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _cancelMidnightRefresh();
     super.dispose();
   }
 
@@ -61,7 +66,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // 앱이 포그라운드로 돌아올 때 데이터 새로고침
     if (state == AppLifecycleState.resumed) {
       _refreshData();
+      _scheduleMidnightRefresh();
     }
+  }
+
+  void _cancelMidnightRefresh() {
+    _midnightTimer?.cancel();
+    _midnightTimer = null;
+  }
+
+  void _scheduleMidnightRefresh() {
+    _cancelMidnightRefresh();
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day).add(
+      const Duration(days: 1),
+    );
+    final duration = nextMidnight.difference(now);
+    _midnightTimer = Timer(duration, () async {
+      await _refreshForMidnight();
+      _scheduleMidnightRefresh();
+    });
   }
 
   /// 데이터 새로고침 메서드
@@ -88,6 +112,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     } else {
       await ref.read(dailySummaryProvider.notifier).refresh();
     }
+  }
+
+  Future<void> _refreshForMidnight() async {
+    if (!mounted) {
+      return;
+    }
+
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+
+    await ref.read(keywordProvider.notifier).loadKeywords();
+    final keywords = ref.read(keywordProvider);
+
+    if (_selectedKeyword != null && keywords.isNotEmpty) {
+      try {
+        final keywordId =
+            keywords.firstWhere((k) => k.text == _selectedKeyword).id;
+        await ref
+            .read(keywordSummaryProvider(keywordId).notifier)
+            .setDate(normalizedToday);
+      } catch (_) {
+        await ref.read(dailySummaryProvider.notifier).setDate(normalizedToday);
+      }
+    } else {
+      await ref.read(dailySummaryProvider.notifier).setDate(normalizedToday);
+    }
+
+    await ref.read(feedProvider.notifier).refresh();
   }
 
   @override

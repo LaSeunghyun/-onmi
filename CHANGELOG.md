@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### 추가됨
+- `backend/api-gateway/src/utils/pending_summary_registry.py` - 키워드 요약 생성 중복 요청을 차단하고 진행 상태를 추적하는 레지스트리 추가
+- 키워드 요약 API가 요약 부재 시 `status: "pending"` 응답을 즉시 반환하고, FastAPI에서 비동기 태스크로 Gemini 요약 생성을 수행하도록 개선
+- 모바일 `KeywordSummaryNotifier`가 서버의 `pending` 응답을 감지해 자동 폴링(최대 5회)으로 새 요약을 재요청하도록 로직 추가
+- `api/cron/daily-report.py`가 사용자별 활성 키워드 요약을 사전 생성해 최초 요청에서도 빠르게 응답하도록 개선
+- `docs/keyword_summary_timeout_analysis.md` - 키워드 요약 타임아웃 원인 및 대응 전략 문서화
 - 모바일 요약 상태를 enum(`SummaryStatus`)으로 관리하여 `loading`(조회중), `pending`(조회전), `error`(에러), `success`(성공) 상태를 명확히 구분
 - 모바일 홈 요약 카드에 "조회중" 및 "조회전" 안내 상태 카드를 추가하고 즉시 재시도 버튼을 제공
 - 모바일 `summary_parser.dart` 유틸을 도입해 Gemini 요약 텍스트를 일관된 섹션 단위로 파싱하고 다중 화면에서 재사용
@@ -54,6 +59,9 @@
   - 모바일 홈 화면에 "조회 가능 쿼리수" 표시 및 자동 갱신
 
 ### 변경됨
+- Flutter `ApiService`의 `connectTimeout`/`receiveTimeout`을 30초로 상향해 장시간 요약 생성 시 타임아웃을 완화
+- 모바일 요약 캐시가 `status: "pending"` 응답은 저장하지 않도록 조정하고, 재시도 한도를 초과하면 명확한 에러 메시지를 노출
+- 키워드 요약 API가 요약 부재 시 비동기 생성을 예약하고 202 응답을 반환하도록 변경
 - 모바일 `DailySummaryState`가 `isLoading`, `isPending` boolean 필드 대신 `SummaryStatus` enum을 사용하여 상태 관리를 단순화하고 타입 안정성 향상
 - 모바일 `InsightSummaryCard`가 `SummaryStatus` enum 기반으로 UI를 분기 처리하여 상태별 적절한 카드(조회중/조회전/에러/성공)를 표시
 - FastAPI `GET /summaries/daily` 및 `GET /summaries/keywords/{keyword_id}`가 404 응답 시 `code`, `articles_count`, `available_dates`를 포함해 프론트엔드가 조회전 상태를 식별할 수 있도록 개선
@@ -75,6 +83,7 @@
 - 사용자 알림 시간 조회 쿼리가 JSONB 키 존재 여부와 정수 비교를 함께 수행하도록 개선하여 형식 편차에 안전하게 동작
 
 ### 문서화
+- README.md - 비동기 요약 생성 흐름과 pending 상태 처리 절차 추가
 - `docs/performance_optimization.md` - 성능 계측, 캐싱, 비동기 처리 전략 정리
 - README.md - Vercel 배포 체크리스트 및 임포트 검증 절차 추가
 - `docs/workflow.md` - 워크플로우 다이어그램 및 설명 추가
