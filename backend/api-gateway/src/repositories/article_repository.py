@@ -292,3 +292,44 @@ class ArticleRepository:
                 article_ids.append(article_id)
         return article_ids
 
+    @staticmethod
+    async def link_keyword_article(keyword_id: UUID, article_id: UUID) -> None:
+        """키워드와 기사 매핑 저장"""
+        async with get_db_connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO keyword_articles (keyword_id, article_id, match_score, match_type)
+                VALUES ($1, $2, 1.0, 'exact')
+                ON CONFLICT (keyword_id, article_id) DO NOTHING
+                """,
+                keyword_id, article_id
+            )
+
+    @staticmethod
+    async def save_sentiment(article_id: UUID, sentiment: Dict[str, Any]) -> None:
+        """감성 분석 결과 저장"""
+        import json
+        
+        rationale_value = sentiment.get('rationale')
+        # rationale이 dict인 경우 JSON 문자열로 변환
+        if isinstance(rationale_value, dict):
+            rationale_value = json.dumps(rationale_value, ensure_ascii=False)
+        elif rationale_value and not isinstance(rationale_value, str):
+            rationale_value = json.dumps(rationale_value, ensure_ascii=False)
+            
+        async with get_db_connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO sentiments (article_id, label, score, rationale, model_ver)
+                VALUES ($1, $2, $3, $4::jsonb, 'rule-based-v1')
+                ON CONFLICT (article_id) DO UPDATE SET
+                    label = EXCLUDED.label,
+                    score = EXCLUDED.score,
+                    rationale = EXCLUDED.rationale
+                """,
+                article_id,
+                sentiment.get('label'),
+                sentiment.get('score'),
+                rationale_value
+            )
+
